@@ -197,6 +197,7 @@
       <div class="section-heading"><div><p class="eyebrow" data-i18n="settings.eyebrow">STARTUP & BEHAVIOR</p><h2 data-i18n="settings.title">Application settings</h2></div></div>
       <article class="form-card settings-form">
         <label class="setting-toggle"><input id="launch-at-login" type="checkbox" /><span><b data-i18n="settings.launch">Launch with Windows</b><small data-i18n="settings.launchHelp">Start the installed app when you sign in.</small></span></label>
+        <label class="setting-toggle"><input id="start-hidden" type="checkbox" /><span><b data-i18n="settings.startHidden">Start hidden on Windows login</b><small data-i18n="settings.startHiddenHelp">Run in the tray without opening the app window.</small></span></label>
         <label class="setting-toggle"><input id="auto-connect" type="checkbox" /><span><b data-i18n="settings.autoConnect">Connect active display on launch</b><small data-i18n="settings.autoConnectHelp">Uses the selected display and its saved USB port.</small></span></label>
         <label class="setting-toggle"><input id="auto-reconnect" type="checkbox" /><span><b data-i18n="settings.reconnect">Reconnect after interruption</b><small data-i18n="settings.reconnectHelp">Retry when a previously connected screen disappears.</small></span></label>
         <label><span data-i18n="settings.delay">Reconnect delay (seconds)</span><input id="reconnect-delay" type="number" min="2" max="60" /></label>
@@ -208,6 +209,7 @@
 
   <div id="toast" class="toast"></div>
   <script src="i18n.js"></script>
+  <script src="youtube.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

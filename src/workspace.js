@@ -220,6 +220,7 @@ function normalizeWorkspace(saved = {}) {
     language: input.language === 'vi' ? 'vi' : 'en',
     startup: {
       launchAtLogin: Boolean(input.startup?.launchAtLogin),
+      startHidden: Boolean(input.startup?.startHidden),
       autoConnect: Boolean(input.startup?.autoConnect),
       autoReconnect: input.startup?.autoReconnect !== false,
       reconnectDelay: clamp(input.startup?.reconnectDelay, 2, 60, 5),

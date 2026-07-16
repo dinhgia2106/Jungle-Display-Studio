@@ -31,11 +31,15 @@ const legacy = normalizeWorkspace({
   todos: [{ id: 'one', title: 'Test migration', done: false }]
 });
 assert.equal(legacy.schemaVersion, 2);
+assert.equal(legacy.startup.startHidden, false);
 assert.equal(legacy.displays.length, 1);
 assert.equal(activeDisplay(legacy).profile.width, 800);
 assert.equal(activeDisplay(legacy).brightness, 75);
 assert.equal(activeDisplay(legacy).canvas.elements[0].type, 'video');
 assert.equal(activeDisplay(legacy).canvas.elements[0].source, 'C:/media/clip.mp4');
+const hiddenStartup = normalizeWorkspace({ startup: { launchAtLogin: true, startHidden: true } });
+assert.equal(hiddenStartup.startup.launchAtLogin, true);
+assert.equal(hiddenStartup.startup.startHidden, true);
 
 const bounded = sanitizeCanvas({
   background: '#abcdef',

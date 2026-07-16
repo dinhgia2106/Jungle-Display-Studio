@@ -65,7 +65,7 @@ function elementHtml(element) {
   if (element.type === "video") return element.source ? '<video src="' + esc(mediaUrl(element.source)) + '" autoplay loop muted playsinline style="object-fit:' + element.fit + '"></video>' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
   if (element.type === "youtube") {
     const id = youtubeId(element.source);
-    return id ? '<iframe src="https://www.youtube-nocookie.com/embed/' + id + "?autoplay=1&mute=1&loop=1&playlist=" + id + '&controls=0&rel=0&playsinline=1"></iframe>' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
+    return id ? '<iframe data-youtube-id="' + esc(id) + '" src="' + esc(window.JUNGLE_YOUTUBE.embedUrl(id)) + '" loading="eager" allow="autoplay; encrypted-media"></iframe>' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
   }
   if (element.type === "image") return element.source ? '<img src="' + esc(mediaUrl(element.source)) + '" style="object-fit:' + element.fit + '">' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
   if (element.type === "shape") return '<div class="element-content"></div>';
@@ -148,6 +148,7 @@ function styleElement(node, element, refreshContent = true) {
   if (refreshContent) { node.innerHTML = elementHtml(element) + '<i class="resize-handle"></i>';node.dataset.contentSignature=contentSignature(element); }
   styleElementLabel(node,element);
   const media = node.querySelector("video,img,iframe");if(media){media.style.objectFit=element.fit;media.style.transform="scale("+(element.mediaScale||1)+")";}
+  if(element.type==="youtube")window.JUNGLE_YOUTUBE.watch(node);
   if (refreshContent) node.querySelector("video")?.play().catch(()=>{});
 }
 function createElementNode(element) {
@@ -216,7 +217,7 @@ function renderTasks() {
   $("task-list").innerHTML = settings.todos.length ? settings.todos.map((task)=>'<div class="task'+(task.done?" done":"")+'"><input type="checkbox" data-task-toggle="'+esc(task.id)+'"'+(task.done?" checked":"")+"><span>"+esc(task.title)+'</span><button data-task-delete="'+esc(task.id)+'">x</button></div>').join("") : '<div class="empty-state">'+tr("done")+"</div>";
 }
 function renderSettings() {
-  $("launch-at-login").checked=settings.startup.launchAtLogin; $("auto-connect").checked=settings.startup.autoConnect; $("auto-reconnect").checked=settings.startup.autoReconnect;
+  $("launch-at-login").checked=settings.startup.launchAtLogin; $("start-hidden").checked=settings.startup.startHidden; $("start-hidden").disabled=!settings.startup.launchAtLogin; $("auto-connect").checked=settings.startup.autoConnect; $("auto-reconnect").checked=settings.startup.autoReconnect;
   $("reconnect-delay").value=settings.startup.reconnectDelay; $("open-preview").checked=settings.startup.openPreview;
 }
 function updateDynamic() {
@@ -337,7 +338,8 @@ function bind(){
   $("task-form").onsubmit=async(e)=>{e.preventDefault();const input=$("task-input"),title=input.value.trim();if(!title)return;settings.todos.push({id:"task-"+Date.now().toString(36),title,done:false});input.value="";await saveRefresh(tr("saved"));};
   $("task-list").onchange=async(e)=>{const task=settings.todos.find((item)=>item.id===e.target.dataset.taskToggle);if(task){task.done=e.target.checked;await saveRefresh(tr("saved"));}};
   $("task-list").onclick=async(e)=>{if(e.target.dataset.taskDelete){settings.todos=settings.todos.filter((task)=>task.id!==e.target.dataset.taskDelete);await saveRefresh(tr("saved"));}};
-  $("save-settings").onclick=async()=>{settings.startup={launchAtLogin:$("launch-at-login").checked,autoConnect:$("auto-connect").checked,autoReconnect:$("auto-reconnect").checked,reconnectDelay:Number($("reconnect-delay").value),openPreview:$("open-preview").checked};await saveRefresh(tr("saved"));};
+  $("launch-at-login").onchange=()=>{$("start-hidden").disabled=!$("launch-at-login").checked;};
+  $("save-settings").onclick=async()=>{settings.startup={launchAtLogin:$("launch-at-login").checked,startHidden:$("start-hidden").checked,autoConnect:$("auto-connect").checked,autoReconnect:$("auto-reconnect").checked,reconnectDelay:Number($("reconnect-delay").value),openPreview:$("open-preview").checked};await saveRefresh(tr("saved"));};
 }
 async function start(){
   [settings,stats,deviceState]=await Promise.all([window.jungle.getSettings(),window.jungle.getSystem(),window.jungle.getDeviceState()]);bind();renderAll();await scan().catch(()=>renderAll());

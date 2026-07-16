@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, session, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -19,6 +19,7 @@ if (!hasSingleInstanceLock) app.quit();
 let controlWindow;
 let streamWindow;
 let previewWindow;
+let tray;
 let driver;
 let settingsCache;
 let quitting = false;
@@ -180,15 +181,21 @@ function quoteWindowsArgument(value) {
   return '"' + String(value).replaceAll('"', '\"') + '"';
 }
 
+function shouldStartHidden(settings = getSettings()) {
+  return process.argv.includes('--hidden') || (process.argv.includes('--autostart') && settings.startup.startHidden);
+}
+
 async function applyStartupSettings(settings) {
-  if (process.platform !== 'win32') return;
+  if (process.platform !== 'win32' || process.argv.includes('--smoke-test')) return;
   app.setLoginItemSettings({ openAtLogin: false });
   await execFileAsync('reg.exe', ['DELETE', WINDOWS_RUN_KEY, '/v', STARTUP_VALUE_NAME, '/f']).catch(() => {});
   if (!settings.startup.launchAtLogin) return;
 
+  const startupArgs = ['--autostart'];
+  if (settings.startup.startHidden) startupArgs.push('--hidden');
   const commandParts = app.isPackaged
-    ? [process.execPath, '--autostart']
-    : [process.execPath, app.getAppPath(), '--autostart'];
+    ? [process.execPath, ...startupArgs]
+    : [process.execPath, app.getAppPath(), ...startupArgs];
   const command = commandParts.map(quoteWindowsArgument).join(' ');
   await execFileAsync('reg.exe', [
     'ADD', WINDOWS_RUN_KEY, '/v', STARTUP_VALUE_NAME,
@@ -229,7 +236,7 @@ async function runStartupActions() {
   const settings = getSettings();
   const display = activeDisplay(settings);
   await applyStartupSettings(settings);
-  if (settings.startup.openPreview) openPreviewWindow();
+  if (settings.startup.openPreview && !shouldStartHidden(settings)) openPreviewWindow();
   if (settings.startup.autoConnect) {
     manualDisconnect = false;
     hadConnection = settings.startup.autoReconnect;
@@ -291,6 +298,35 @@ function openPreviewWindow() {
   });
 }
 
+function showControlWindow() {
+  if (!controlWindow || controlWindow.isDestroyed()) return;
+  if (controlWindow.isMinimized()) controlWindow.restore();
+  controlWindow.show();
+  controlWindow.focus();
+}
+
+function updateTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  const vietnamese = getSettings().language === 'vi';
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: vietnamese ? '\u004d\u1edf Jungle Display Studio' : 'Open Jungle Display Studio', click: showControlWindow },
+    { label: vietnamese ? 'Xem tr\u01b0\u1edbc' : 'Preview', click: openPreviewWindow },
+    { type: 'separator' },
+    { label: vietnamese ? 'Tho\u00e1t h\u1eb3n' : 'Quit', click: () => app.quit() }
+  ]));
+}
+
+function createTray() {
+  if (tray && !tray.isDestroyed()) return;
+  let icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png'));
+  if (!icon.isEmpty()) icon = icon.resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  tray.setToolTip('Jungle Display Studio');
+  updateTrayMenu();
+  tray.on('click', showControlWindow);
+  tray.on('double-click', showControlWindow);
+}
+
 async function captureFrame() {
   if (!streamWindow || streamWindow.isDestroyed()) throw new Error('The display renderer is not ready.');
   const display = activeDisplay(getSettings());
@@ -311,6 +347,7 @@ function createControlWindow() {
     height: 900,
     minWidth: 1080,
     minHeight: 700,
+    show: !shouldStartHidden(),
     backgroundColor: '#0b1018',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -384,6 +421,14 @@ function createControlWindow() {
           const multiSelected = document.querySelectorAll('.canvas-element.selected').length;
           const firstGap = arranged[1].x - arranged[0].x - arranged[0].width;
           const secondGap = arranged[2].x - arranged[1].x - arranged[1].width;
+          document.querySelector('[data-add="youtube"]').click();
+          const youtubeSource = document.getElementById('prop-source');
+          youtubeSource.value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+          youtubeSource.dispatchEvent(new Event('change', { bubbles: true }));
+          const youtubeFrame = document.querySelector('.canvas-element.youtube.selected iframe');
+          const youtubeWatchdog = Boolean(youtubeFrame?.__jungleWatched)
+            && Boolean(youtubeFrame?.__jungleRetryTimer || youtubeFrame?.dataset.youtubeReady === '1')
+            && new URL(youtubeFrame.src).searchParams.get('enablejsapi') === '1';
           document.querySelector('[data-add="video"]').click();
           const sourceInput = document.getElementById('prop-source');
           sourceInput.value = 'data:video/mp4;base64,AAAA';
@@ -441,6 +486,7 @@ function createControlWindow() {
             transparentBackground,
             multiSelected,
             equalHorizontalGaps: Math.abs(firstGap - secondGap) <= 1,
+            youtubeWatchdog,
             videoNodePreserved,
             fullCanvasCrop,
             mediaZoomApplied,
@@ -455,10 +501,15 @@ function createControlWindow() {
         const streamVideoReady = await streamWindow.webContents.executeJavaScript("window.__smokeVideoNode = document.querySelector('.widget.video video'); Boolean(window.__smokeVideoNode)");
         await controlWindow.webContents.executeJavaScript("(() => { const input = document.getElementById('prop-opacity'); input.value = 99; input.dispatchEvent(new Event('input', { bubbles: true })); })()");
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '' })");
+        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, youtubeWatchdog: (() => { const frame = document.querySelector('.widget.youtube iframe'); return Boolean(frame?.__jungleWatched) && Boolean(frame?.__jungleRetryTimer || frame?.dataset.youtubeReady === '1') && new URL(frame.src).searchParams.get('enablejsapi') === '1'; })(), videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '' })");
         const taskLayoutParity = control.taskLayoutSignature === display.taskLayoutSignature;
         if (!taskLayoutParity) throw new Error('Editor/output task layout mismatch: ' + control.taskLayoutSignature + ' !== ' + display.taskLayoutSignature);
-        console.log('SMOKE_TEST ' + JSON.stringify({ control, display, taskLayoutParity }));
+        controlWindow.close();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const backgroundAfterClose = !controlWindow.isDestroyed() && !controlWindow.isVisible() && Boolean(tray && !tray.isDestroyed());
+        showControlWindow();
+        if (!backgroundAfterClose) throw new Error('Closing the control window did not keep the tray process alive.');
+        console.log('SMOKE_TEST ' + JSON.stringify({ control, display, taskLayoutParity, backgroundAfterClose }));
       } catch (error) {
         console.error('SMOKE_TEST_FAILED', error);
         process.exitCode = 1;
@@ -467,8 +518,14 @@ function createControlWindow() {
       }
     }, 1600));
   }
+  controlWindow.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      controlWindow.hide();
+    }
+  });
   controlWindow.on('closed', () => {
-    if (!quitting) app.quit();
+    controlWindow = null;
   });
 }
 
@@ -478,6 +535,7 @@ function registerIpc() {
     const previous = getSettings();
     const previousDisplay = activeDisplay(previous);
     const saved = saveSettings(next);
+    updateTrayMenu();
     const nextDisplay = activeDisplay(saved);
     const displayChanged = previous.activeDisplayId !== saved.activeDisplayId;
 
@@ -546,6 +604,7 @@ app.whenReady().then(async () => {
   registerIpc();
   createStreamWindow();
   createControlWindow();
+  createTray();
   cpuPercent();
   setInterval(() => {
     cachedCpuPercent = cpuPercent();
@@ -554,10 +613,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('second-instance', () => {
-  if (!controlWindow || controlWindow.isDestroyed()) return;
-  if (controlWindow.isMinimized()) controlWindow.restore();
-  controlWindow.show();
-  controlWindow.focus();
+  showControlWindow();
 });
 
 app.on('before-quit', async (event) => {
@@ -574,5 +630,5 @@ app.on('before-quit', async (event) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Keep the background renderer, serial connection and tray alive.
 });

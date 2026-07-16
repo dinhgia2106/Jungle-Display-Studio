@@ -17,7 +17,9 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - Independent label and content typography per element, including color, font size and outline color/width, with cross-element Copy/Paste style; plus solid or transparent backgrounds, opacity, corner radius, media fit and up to 400% media zoom.
 - Canvas background color and optional background image.
 - English by default, with a Vietnamese interface.
-- Windows login launch, auto-connect, reconnect delay and preview-on-launch.
+- Windows login launch with an optional hidden start, auto-connect, reconnect delay and preview-on-launch.
+- Closing the control window keeps streaming in the system tray; the tray menu can reopen Preview or quit fully.
+- YouTube embeds use a readiness watchdog and automatic retry instead of remaining stuck after restart.
 - Local settings only; no telemetry or cloud account.
 
 The USB driver streams to one selected Jungle display at a time. Switching the active display disconnects the previous stream so frames cannot be sent to the wrong device.
@@ -59,8 +61,8 @@ The generated x64 NSIS EXE and MSI files are written to **dist/**.
 
 Push a version tag matching package.json:
 
-    git tag v1.3.0
-    git push origin v1.2.0
+    git tag v1.3.1
+    git push origin v1.3.1
 
 The workflow in **.github/workflows/release.yml** validates, builds and attaches both installers to a GitHub Release.
 
