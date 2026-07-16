@@ -5,9 +5,10 @@ body { background: #071019; color: #effaf5; font-family: Inter, "Segoe UI", Aria
 .widget { position: absolute; overflow: hidden; }
 .widget-inner { width: 100%; height: 100%; padding: 8%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .widget-label { flex: 0 0 auto; margin-bottom: 5%; color: currentColor; font-size: .38em; font-weight: 800; letter-spacing: .08em; opacity: .75; }
+.widget.tasks .widget-label, .widget.uptime .widget-label { font-size: 1.52em; line-height: .9; }
 .widget-value { min-width: 0; overflow: hidden; font-size: 1em; font-weight: 850; line-height: .95; white-space: nowrap; text-overflow: ellipsis; }
 .widget-value.multiline { line-height: 1.08; white-space: pre-wrap; }
-.widget video, .widget img, .widget iframe { display: block; width: 100%; height: 100%; border: 0; }
+.widget video, .widget img, .widget iframe { display: block; width: 100%; height: 100%; border: 0; transform-origin: center center; will-change: transform; }
 .task-widget { justify-content: flex-start; padding: 5%; }
 .task-widget ol { width: 100%; min-height: 0; margin: 2% 0 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 2%; list-style: none; overflow: hidden; }
 .task-widget li { min-height: 0; padding: 2% 3%; overflow: hidden; border-radius: .2em; background: rgba(255,255,255,.07); font-size: .72em; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }

@@ -2,7 +2,7 @@
 
 An open-source Electron workspace for compatible Jungle Leopard USB Serial displays.
 
-The app is not limited to AC-02. Each discovered display keeps its own USB port, resolution, brightness, rotation and canvas layout.
+Each discovered display keeps its own USB port, resolution, brightness, rotation and canvas layout.
 
 ## Features
 
@@ -10,9 +10,11 @@ The app is not limited to AC-02. Each discovered display keeps its own USB port,
 - Keep separate profiles and layouts for multiple saved displays.
 - Reset a display to the profile captured when it was first discovered.
 - Freeform canvas editor with drag, resize, exact position and layer controls.
+- Shift-click multi-selection with edge/center alignment and equal horizontal or vertical gaps.
+- Context-aware properties show only the controls supported by the selected element.
 - Clock, date, text, CPU, RAM, GPU, uptime, tasks, shape, image, local video and YouTube elements.
 - Video and YouTube are resizable canvas elements instead of forced full-screen modes.
-- Per-element text color, background color, opacity, font size, corner radius and media fit.
+- Independent label and content typography per element, including color, font size and outline color/width, with cross-element Copy/Paste style; plus solid or transparent backgrounds, opacity, corner radius, media fit and up to 400% media zoom.
 - Canvas background color and optional background image.
 - English by default, with a Vietnamese interface.
 - Windows login launch, auto-connect, reconnect delay and preview-on-launch.
@@ -57,7 +59,7 @@ The generated x64 NSIS EXE and MSI files are written to **dist/**.
 
 Push a version tag matching package.json:
 
-    git tag v1.2.0
+    git tag v1.3.0
     git push origin v1.2.0
 
 The workflow in **.github/workflows/release.yml** validates, builds and attaches both installers to a GitHub Release.
@@ -71,13 +73,3 @@ No telemetry, analytics or remote settings service is included. YouTube elements
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). This project is available under the [MIT License](LICENSE).
-
----
-
-## Tiếng Việt
-
-Jungle Display Studio là workspace mã nguồn mở cho các màn hình Jungle Leopard tương thích giao thức USB Serial. Mỗi màn hình lưu riêng cổng USB, độ phân giải, độ sáng và canvas.
-
-Trong **Tổng quan**, người dùng quét và chọn màn hình cần kết nối. Trong **Canvas**, có thể thêm, kéo, đổi kích thước và xếp lớp đồng hồ, CPU, RAM, GPU, công việc, chữ, hình ảnh, video cục bộ hoặc YouTube. Video chỉ là một element nên không còn bắt buộc chiếm toàn màn hình.
-
-Nút reset profile khôi phục cấu hình đã ghi nhận khi quét. Nếu thiết bị USB không báo kích thước, ứng dụng dùng profile fallback trong file cấu hình mở. Ứng dụng không thu thập dữ liệu; settings và công việc chỉ lưu cục bộ.

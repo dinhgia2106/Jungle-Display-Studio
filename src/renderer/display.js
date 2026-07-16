@@ -78,6 +78,64 @@ function contentMarkup(element) {
   return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="' + element.type + '">' + metric(element.type) + '</b></div>';
 }
 
+function contentSignature(element) {
+  const signature = [element.type, element.title, element.text, element.source, element.maxItems];
+  if (element.type === 'tasks') signature.push(settings.todos);
+  return JSON.stringify(signature);
+}
+
+function resolvedLabelStyle(element) {
+  const scale = ['tasks', 'uptime'].includes(element.type) ? 1.52 : 0.38;
+  return {
+    color: element.labelColor || element.color,
+    fontSize: Number.isFinite(Number(element.labelFontSize)) ? Number(element.labelFontSize) : element.fontSize * scale,
+    strokeColor: element.labelStrokeColor || element.textStrokeColor || '#000000',
+    strokeWidth: Number.isFinite(Number(element.labelStrokeWidth)) ? Number(element.labelStrokeWidth) : (element.textStrokeWidth || 0)
+  };
+}
+
+function styleWidgetLabel(node, element) {
+  const label = node.querySelector('.widget-label');
+  if (!label) return;
+  const style = resolvedLabelStyle(element);
+  Object.assign(label.style, {
+    color: style.color,
+    fontSize: style.fontSize + 'px',
+    WebkitTextStrokeColor: style.strokeColor,
+    WebkitTextStrokeWidth: style.strokeWidth + 'px',
+    paintOrder: 'stroke fill'
+  });
+}
+
+function styleWidget(node, element, refreshContent = true) {
+  Object.assign(node.style, {
+    left: element.x + 'px',
+    top: element.y + 'px',
+    width: element.width + 'px',
+    height: element.height + 'px',
+    zIndex: element.z,
+    color: element.color,
+    backgroundColor: element.background,
+    fontSize: element.fontSize + 'px',
+    WebkitTextStrokeColor: element.textStrokeColor || '#000000',
+    WebkitTextStrokeWidth: (element.textStrokeWidth || 0) + 'px',
+    paintOrder: 'stroke fill',
+    opacity: element.opacity,
+    borderRadius: element.radius + 'px'
+  });
+  if (refreshContent) {
+    node.innerHTML = contentMarkup(element);
+    node.dataset.contentSignature = contentSignature(element);
+  }
+  styleWidgetLabel(node, element);
+  const media = node.querySelector('video,img,iframe');
+  if (media) {
+    media.style.objectFit = element.fit;
+    media.style.transform = 'scale(' + (element.mediaScale || 1) + ')';
+  }
+  if (refreshContent) node.querySelector('video')?.play().catch(() => {});
+}
+
 function renderLayout() {
   const display = activeDisplay();
   const canvas = display.canvas;
@@ -87,26 +145,22 @@ function renderLayout() {
   root.style.backgroundSize = 'cover';
   root.style.backgroundPosition = 'center';
   root.style.transform = !isPreview && display.profile.rotation === 180 ? 'rotate(180deg)' : 'none';
-  root.innerHTML = '';
-  canvas.elements.slice().sort((a, b) => a.z - b.z).forEach((element) => {
-    const node = document.createElement('section');
-    node.className = 'widget ' + element.type;
-    node.dataset.type = element.type;
-    Object.assign(node.style, {
-      left: element.x + 'px',
-      top: element.y + 'px',
-      width: element.width + 'px',
-      height: element.height + 'px',
-      zIndex: element.z,
-      color: element.color,
-      backgroundColor: element.background,
-      fontSize: element.fontSize + 'px',
-      opacity: element.opacity,
-      borderRadius: element.radius + 'px'
-    });
-    node.innerHTML = contentMarkup(element);
-    root.appendChild(node);
-    node.querySelector('video')?.play().catch(() => {});
+  const validIds = new Set(canvas.elements.map((element) => element.id));
+  canvas.elements.forEach((element) => {
+    let node = root.querySelector('[data-element-id="' + CSS.escape(element.id) + '"]');
+    if (!node) {
+      node = document.createElement('section');
+      node.className = 'widget ' + element.type;
+      node.dataset.elementId = element.id;
+      node.dataset.type = element.type;
+      styleWidget(node, element);
+      root.appendChild(node);
+    } else {
+      styleWidget(node, element, node.dataset.contentSignature !== contentSignature(element));
+    }
+  });
+  root.querySelectorAll('.widget').forEach((node) => {
+    if (!validIds.has(node.dataset.elementId)) node.remove();
   });
 }
 

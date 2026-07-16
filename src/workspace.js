@@ -10,6 +10,12 @@ function color(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(text) ? text.toLowerCase() : fallback;
 }
 
+function elementBackground(value, fallback) {
+  return String(value || '').toLowerCase() === 'transparent'
+    ? 'transparent'
+    : color(value, fallback);
+}
+
 function number(value, min, max, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
@@ -29,7 +35,8 @@ function defaultElements(profile = DEFAULT_PROFILE) {
     x: Math.round(x * sx), y: Math.round(y * sy),
     width: Math.round(width * sx), height: Math.round(height * sy),
     color: '#effaf5', background: '#102832', fontSize: Math.max(12, Math.round(28 * Math.min(sx, sy))),
-    opacity: 1, radius: Math.max(4, Math.round(12 * Math.min(sx, sy))), fit: 'cover', z: 1,
+    textStrokeColor: '#000000', textStrokeWidth: 0,
+    opacity: 1, radius: Math.max(4, Math.round(12 * Math.min(sx, sy))), fit: 'cover', mediaScale: 1, z: 1,
     title: '', text: '', source: '', maxItems: 4, ...extra
   });
   return [
@@ -62,9 +69,12 @@ function elementDefaults(type, index) {
     color: '#effaf5',
     background: type === 'shape' ? '#62edab' : '#102832',
     fontSize: type === 'clock' ? 52 : 28,
+    textStrokeColor: '#000000',
+    textStrokeWidth: 0,
     opacity: 1,
     radius: 12,
     fit: 'cover',
+    mediaScale: 1,
     z: index + 1,
     title: labels[type] || '',
     text: type === 'text' ? 'Your text' : '',
@@ -79,6 +89,11 @@ function sanitizeElement(value, profile, index) {
   const base = { ...elementDefaults(type, index), ...(value || {}), type };
   const width = clamp(base.width, 40, safeProfile.width, Math.min(220, safeProfile.width));
   const height = clamp(base.height, 32, safeProfile.height, Math.min(110, safeProfile.height));
+  const fontSize = clamp(base.fontSize, 6, 300, 28);
+  const textColor = color(base.color, '#effaf5');
+  const textStrokeColor = color(base.textStrokeColor, '#000000');
+  const textStrokeWidth = Math.round(number(base.textStrokeWidth, 0, 30, 0) * 10) / 10;
+  const legacyLabelScale = ['tasks', 'uptime'].includes(type) ? 1.52 : 0.38;
   return {
     id: safeId(base.id, 'element-' + index),
     type,
@@ -86,12 +101,19 @@ function sanitizeElement(value, profile, index) {
     y: clamp(base.y, 0, Math.max(0, safeProfile.height - height), 0),
     width,
     height,
-    color: color(base.color, '#effaf5'),
-    background: color(base.background, '#102832'),
-    fontSize: clamp(base.fontSize, 6, 300, 28),
+    color: textColor,
+    background: elementBackground(base.background, '#102832'),
+    fontSize,
+    textStrokeColor,
+    textStrokeWidth,
+    labelColor: color(base.labelColor, textColor),
+    labelFontSize: Math.round(number(base.labelFontSize, 4, 400, fontSize * legacyLabelScale) * 10) / 10,
+    labelStrokeColor: color(base.labelStrokeColor, textStrokeColor),
+    labelStrokeWidth: Math.round(number(base.labelStrokeWidth, 0, 30, textStrokeWidth) * 10) / 10,
     opacity: Math.round(number(base.opacity, 0.05, 1, 1) * 100) / 100,
     radius: clamp(base.radius, 0, 200, 12),
     fit: ['cover', 'contain', 'fill'].includes(base.fit) ? base.fit : 'cover',
+    mediaScale: Math.round(number(base.mediaScale, 0.5, 4, 1) * 100) / 100,
     z: clamp(base.z, 0, 9999, index + 1),
     title: String(base.title || '').slice(0, 80),
     text: String(base.text || '').slice(0, 500),

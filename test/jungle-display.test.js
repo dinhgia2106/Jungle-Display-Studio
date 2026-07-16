@@ -46,4 +46,31 @@ assert.equal(bounded.elements[0].height, 480);
 assert.equal(bounded.elements[0].x, 0);
 assert.equal(bounded.elements[0].y, 0);
 
+const transparent = sanitizeCanvas({
+  elements: [{ id: 'transparent', type: 'cpu', background: 'transparent', textStrokeColor: '#ff00aa', textStrokeWidth: 99 }, { id: 'zoomed-video', type: 'video', mediaScale: 9 }]
+}, { width: 480, height: 480 });
+assert.equal(transparent.elements[0].background, 'transparent');
+assert.equal(transparent.elements[0].textStrokeColor, '#ff00aa');
+assert.equal(transparent.elements[0].textStrokeWidth, 30);
+assert.equal(transparent.elements[0].labelColor, '#effaf5');
+assert.equal(transparent.elements[0].labelFontSize, 10.6);
+assert.equal(transparent.elements[0].labelStrokeColor, '#ff00aa');
+assert.equal(transparent.elements[0].labelStrokeWidth, 30);
+assert.equal(transparent.elements[1].mediaScale, 4);
+
+const splitTypography = sanitizeCanvas({
+  elements: [{
+    id: 'split-tasks', type: 'tasks', color: '#ffffff', fontSize: 20,
+    textStrokeColor: '#111111', textStrokeWidth: 1,
+    labelColor: '#00ffaa', labelFontSize: 999,
+    labelStrokeColor: '#0033ff', labelStrokeWidth: 2.5
+  }]
+}, { width: 960, height: 480 });
+assert.equal(splitTypography.elements[0].color, '#ffffff');
+assert.equal(splitTypography.elements[0].fontSize, 20);
+assert.equal(splitTypography.elements[0].labelColor, '#00ffaa');
+assert.equal(splitTypography.elements[0].labelFontSize, 400);
+assert.equal(splitTypography.elements[0].labelStrokeColor, '#0033ff');
+assert.equal(splitTypography.elements[0].labelStrokeWidth, 2.5);
+
 console.log('Jungle Display protocol, profile and workspace checks passed.');

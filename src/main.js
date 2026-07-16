@@ -68,8 +68,13 @@ function broadcast(channel, value) {
   }
 }
 
-function broadcastSettings() {
-  broadcast('settings:updated', getSettings());
+function broadcastSettings(excludedWebContents = null) {
+  const value = getSettings();
+  for (const win of [controlWindow, streamWindow, previewWindow]) {
+    if (win && !win.isDestroyed() && win.webContents.id !== excludedWebContents?.id) {
+      win.webContents.send('settings:updated', value);
+    }
+  }
 }
 
 function cpuPercent() {
@@ -317,9 +322,143 @@ function createControlWindow() {
   if (process.argv.includes('--smoke-test')) {
     controlWindow.webContents.once('did-finish-load', () => setTimeout(async () => {
       try {
-        const control = await controlWindow.webContents.executeJavaScript("({ title: document.title, deviceCards: document.querySelectorAll('.device-card').length, paletteItems: document.querySelectorAll('[data-add]').length, canvasElements: document.querySelectorAll('.canvas-element').length, translationDecoded: window.JUNGLE_I18N.vi['nav.overview'].includes(String.fromCodePoint(7893)) })");
-        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length })");
-        console.log('SMOKE_TEST ' + JSON.stringify({ control, display }));
+        const control = await controlWindow.webContents.executeJavaScript(`(async () => {
+          const press = (id, shiftKey = false) => {
+            const node = document.querySelector('[data-element-id="' + CSS.escape(id) + '"]');
+            node.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, shiftKey, clientX: 10, clientY: 10 }));
+            document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+          };
+          document.querySelector('.nav[data-panel="canvas"]').click();
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          press('cpu');
+          const inspectorFiltered = document.getElementById('prop-items-row').hidden
+            && document.getElementById('prop-text-row').hidden
+            && getComputedStyle(document.getElementById('prop-items-row')).display === 'none';
+          const outlineControlVisible = !document.getElementById('prop-stroke-row').hidden;
+          const outlineColorInput = document.getElementById('prop-stroke-color');
+          outlineColorInput.value = '#ff0066';
+          outlineColorInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const outlineWidthInput = document.getElementById('prop-stroke-width');
+          outlineWidthInput.value = 3;
+          outlineWidthInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const cpuOutlineStyle = document.querySelector('[data-element-id="cpu"]').style;
+          const textOutlineApplied = cpuOutlineStyle.webkitTextStrokeWidth === '3px'
+            && cpuOutlineStyle.webkitTextStrokeColor !== '';
+          const labelStyleControlVisible = !document.getElementById('prop-label-style').hidden;
+          const labelColorInput = document.getElementById('prop-label-color');
+          labelColorInput.value = '#00ffaa';
+          labelColorInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const labelFontInput = document.getElementById('prop-label-font-size');
+          labelFontInput.value = 21;
+          labelFontInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const labelStrokeColorInput = document.getElementById('prop-label-stroke-color');
+          labelStrokeColorInput.value = '#0033ff';
+          labelStrokeColorInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const labelStrokeWidthInput = document.getElementById('prop-label-stroke-width');
+          labelStrokeWidthInput.value = 2;
+          labelStrokeWidthInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const cpuLabelStyle = document.querySelector('[data-element-id="cpu"] .element-label').style;
+          const independentLabelStyle = cpuLabelStyle.fontSize === '21px'
+            && cpuLabelStyle.webkitTextStrokeWidth === '2px'
+            && cpuOutlineStyle.webkitTextStrokeWidth === '3px'
+            && cpuLabelStyle.color !== cpuOutlineStyle.color;
+          document.getElementById('copy-content-style').click();
+          const stylePasteEnabled = !document.getElementById('paste-content-style').disabled && !document.getElementById('paste-label-style').disabled;
+          press('ram');
+          document.getElementById('paste-label-style').click();
+          const ramLabelStyle = document.querySelector('[data-element-id="ram"] .element-label').style;
+          const crossStylePaste = ramLabelStyle.color === cpuOutlineStyle.color
+            && ramLabelStyle.fontSize === cpuOutlineStyle.fontSize
+            && ramLabelStyle.webkitTextStrokeColor === cpuOutlineStyle.webkitTextStrokeColor
+            && ramLabelStyle.webkitTextStrokeWidth === cpuOutlineStyle.webkitTextStrokeWidth;
+          press('cpu');
+          if (!document.getElementById('prop-background-transparent').checked) document.getElementById('prop-background-transparent').click();
+          const transparentBackground = document.querySelector('[data-element-id="cpu"]').style.backgroundColor === 'transparent';
+          press('ram', true);
+          press('gpu', true);
+          document.querySelector('[data-arrange="space-x"]').click();
+          const arranged = ['cpu', 'ram', 'gpu'].map((id) => {
+            const node = document.querySelector('[data-element-id="' + id + '"]');
+            return { x: parseFloat(node.style.left), width: parseFloat(node.style.width) };
+          }).sort((a, b) => a.x - b.x);
+          const multiSelected = document.querySelectorAll('.canvas-element.selected').length;
+          const firstGap = arranged[1].x - arranged[0].x - arranged[0].width;
+          const secondGap = arranged[2].x - arranged[1].x - arranged[1].width;
+          document.querySelector('[data-add="video"]').click();
+          const sourceInput = document.getElementById('prop-source');
+          sourceInput.value = 'data:video/mp4;base64,AAAA';
+          sourceInput.dispatchEvent(new Event('change', { bubbles: true }));
+          const videoBox = document.querySelector('.canvas-element.video.selected');
+          const videoId = videoBox.dataset.elementId;
+          const videoNode = videoBox.querySelector('video');
+          press('cpu');
+          const sameAfterSelection = document.querySelector('[data-element-id="' + CSS.escape(videoId) + '"] video') === videoNode;
+          const dragBox = document.querySelector('[data-element-id="' + CSS.escape(videoId) + '"]');
+          dragBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+          document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 24, clientY: 18 }));
+          document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          document.getElementById('media-fill-canvas').click();
+          const fullCanvasVideoBox = document.querySelector('[data-element-id="' + CSS.escape(videoId) + '"]');
+          const fullCanvasCrop = fullCanvasVideoBox.querySelector('video') === videoNode
+            && parseFloat(fullCanvasVideoBox.style.left) === 0
+            && parseFloat(fullCanvasVideoBox.style.top) === 0
+            && parseFloat(fullCanvasVideoBox.style.width) === 960
+            && parseFloat(fullCanvasVideoBox.style.height) === 480
+            && fullCanvasVideoBox.querySelector('video').style.objectFit === 'cover';
+          const zoomInput = document.getElementById('prop-media-scale');
+          zoomInput.value = 250;
+          zoomInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const currentVideoNode = document.querySelector('[data-element-id="' + CSS.escape(videoId) + '"] video');
+          const videoNodePreserved = sameAfterSelection && currentVideoNode === videoNode;
+          const mediaZoomApplied = currentVideoNode.style.transform === 'scale(2.5)';
+          const outlineInspectorFiltered = document.getElementById('prop-content-style').hidden && document.getElementById('prop-label-style').hidden;
+          const taskBox = document.querySelector('.canvas-element.tasks');
+          const taskText = taskBox.querySelector('li');
+          const taskTextScale = Math.round(parseFloat(getComputedStyle(taskText).fontSize) / parseFloat(taskBox.style.fontSize) * 100) / 100;
+          const uptimeBox = document.querySelector('.canvas-element.uptime');
+          const elementLabelScale = Math.round(parseFloat(getComputedStyle(uptimeBox.querySelector('.element-label')).fontSize) / parseFloat(uptimeBox.style.fontSize) * 100) / 100;
+          const gpuBox = document.querySelector('.canvas-element.gpu');
+          const standardLabelScale = Math.round(parseFloat(getComputedStyle(gpuBox.querySelector('.element-label')).fontSize) / parseFloat(gpuBox.style.fontSize) * 100) / 100;
+          const taskListRestored = getComputedStyle(taskBox.querySelector('ol')).flexGrow === '0' && getComputedStyle(taskText, '::before').content === 'none';
+          const taskLabel = taskBox.querySelector('.element-label');
+          const taskTextStyle = getComputedStyle(taskText);
+          const taskLayoutSignature = [taskLabel.offsetLeft, taskLabel.offsetTop, taskText.offsetLeft, taskText.offsetTop, taskText.offsetWidth, taskText.offsetHeight, taskTextStyle.fontSize, taskTextStyle.lineHeight, taskTextStyle.padding].join('|');
+          return {
+            title: document.title,
+            deviceCards: document.querySelectorAll('.device-card').length,
+            paletteItems: document.querySelectorAll('[data-add]').length,
+            canvasElements: document.querySelectorAll('.canvas-element').length,
+            translationDecoded: window.JUNGLE_I18N.vi['nav.overview'].includes(String.fromCodePoint(7893)),
+            inspectorFiltered,
+            outlineControlVisible,
+            outlineInspectorFiltered,
+            textOutlineApplied,
+            labelStyleControlVisible,
+            independentLabelStyle,
+            stylePasteEnabled,
+            crossStylePaste,
+            transparentBackground,
+            multiSelected,
+            equalHorizontalGaps: Math.abs(firstGap - secondGap) <= 1,
+            videoNodePreserved,
+            fullCanvasCrop,
+            mediaZoomApplied,
+            taskTextScale,
+            elementLabelScale,
+            standardLabelScale,
+            taskListRestored,
+            taskLayoutSignature
+          };
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const streamVideoReady = await streamWindow.webContents.executeJavaScript("window.__smokeVideoNode = document.querySelector('.widget.video video'); Boolean(window.__smokeVideoNode)");
+        await controlWindow.webContents.executeJavaScript("(() => { const input = document.getElementById('prop-opacity'); input.value = 99; input.dispatchEvent(new Event('input', { bubbles: true })); })()");
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '' })");
+        const taskLayoutParity = control.taskLayoutSignature === display.taskLayoutSignature;
+        if (!taskLayoutParity) throw new Error('Editor/output task layout mismatch: ' + control.taskLayoutSignature + ' !== ' + display.taskLayoutSignature);
+        console.log('SMOKE_TEST ' + JSON.stringify({ control, display, taskLayoutParity }));
       } catch (error) {
         console.error('SMOKE_TEST_FAILED', error);
         process.exitCode = 1;
@@ -335,7 +474,7 @@ function createControlWindow() {
 
 function registerIpc() {
   ipcMain.handle('settings:get', () => getSettings());
-  ipcMain.handle('settings:save', async (_, next) => {
+  ipcMain.handle('settings:save', async (event, next) => {
     const previous = getSettings();
     const previousDisplay = activeDisplay(previous);
     const saved = saveSettings(next);
@@ -352,7 +491,7 @@ function registerIpc() {
     resizeRenderers(nextDisplay.profile);
     await applyStartupSettings(saved);
     if (!saved.startup.autoReconnect) clearReconnectTimer();
-    broadcastSettings();
+    broadcastSettings(event.sender);
 
     if (!displayChanged && driver?.isConnected && previousDisplay.brightness !== nextDisplay.brightness) {
       await driver.setBrightness(nextDisplay.brightness);

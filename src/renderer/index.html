@@ -87,26 +87,61 @@
           <h3 data-i18n="canvas.properties">Properties</h3>
           <div id="inspector-empty" class="inspector-empty" data-i18n="canvas.selectHint">Select an element on the canvas.</div>
           <div id="inspector-fields" hidden>
-            <div class="inspector-type"><span id="prop-type">TEXT</span><small id="prop-id"></small></div>
-            <label><span data-i18n="property.title">Label</span><input id="prop-title" maxlength="80" /></label>
+            <div class="inspector-type"><span id="prop-type">TEXT</span><small id="prop-selection-count"></small></div>
+            <section class="arrange-tools">
+              <div><b data-i18n="canvas.arrange">Align & spacing</b><small data-i18n="canvas.multiSelectHint">Shift-click to select multiple elements</small></div>
+              <div class="arrange-grid">
+                <button class="ghost" data-arrange="left" title="Align left">L</button>
+                <button class="ghost" data-arrange="center-x" title="Align horizontal center">CX</button>
+                <button class="ghost" data-arrange="right" title="Align right">R</button>
+                <button class="ghost" data-arrange="top" title="Align top">T</button>
+                <button class="ghost" data-arrange="center-y" title="Align vertical center">CY</button>
+                <button class="ghost" data-arrange="bottom" title="Align bottom">B</button>
+                <button class="ghost span-3" data-arrange="space-x" title="Distribute equal horizontal gaps" data-i18n="action.equalHorizontal">Equal horizontal gaps</button>
+                <button class="ghost span-3" data-arrange="space-y" title="Distribute equal vertical gaps" data-i18n="action.equalVertical">Equal vertical gaps</button>
+              </div>
+            </section>
+            <label id="prop-title-row"><span data-i18n="property.title">Label</span><input id="prop-title" maxlength="80" /></label>
             <label id="prop-text-row"><span data-i18n="property.text">Text</span><textarea id="prop-text" maxlength="500"></textarea></label>
-            <label id="prop-source-row"><span data-i18n="property.source">Source</span><div class="input-action"><input id="prop-source" /><button id="pick-source" class="icon-button">…</button></div></label>
-            <div class="field-grid four">
+            <label id="prop-source-row"><span data-i18n="property.source">Source</span><div class="input-action"><input id="prop-source" /><button id="pick-source" class="icon-button">...</button></div></label>
+            <div class="field-grid four" id="prop-position-row">
               <label><span>X</span><input id="prop-x" type="number" min="0" /></label>
               <label><span>Y</span><input id="prop-y" type="number" min="0" /></label>
               <label><span>W</span><input id="prop-width" type="number" min="40" /></label>
               <label><span>H</span><input id="prop-height" type="number" min="32" /></label>
             </div>
-            <div class="field-grid">
-              <label><span data-i18n="property.color">Text color</span><input id="prop-color" type="color" /></label>
-              <label><span data-i18n="property.background">Background</span><input id="prop-background" type="color" /></label>
+            <label id="prop-background-row"><span data-i18n="property.background">Background</span><input id="prop-background" type="color" /></label>
+            <label class="compact-toggle" id="prop-transparent-row"><input id="prop-background-transparent" type="checkbox" /><span data-i18n="property.transparent">Transparent background</span></label>
+            <label id="prop-radius-row"><span data-i18n="property.radius">Corner radius</span><input id="prop-radius" type="number" min="0" max="200" /></label>
+            <section class="text-style-card" id="prop-content-style">
+              <div class="text-style-header"><h4 data-i18n="property.contentStyle">Content style</h4><div class="text-style-actions"><button id="copy-content-style" type="button" data-i18n="action.copyStyle">Copy</button><button id="paste-content-style" type="button" data-i18n="action.pasteStyle" disabled>Paste</button></div></div>
+              <div class="field-grid">
+                <label id="prop-color-row"><span data-i18n="property.contentColor">Content color</span><input id="prop-color" type="color" /></label>
+                <label id="prop-font-row"><span data-i18n="property.contentFontSize">Content size</span><input id="prop-font-size" type="number" min="6" max="300" /></label>
+              </div>
+              <div class="field-grid" id="prop-stroke-row">
+                <label><span data-i18n="property.contentStrokeColor">Content outline</span><input id="prop-stroke-color" type="color" /></label>
+                <label><span data-i18n="property.contentStrokeWidth">Outline width</span><input id="prop-stroke-width" type="number" min="0" max="30" step="0.5" /></label>
+              </div>
+            </section>
+            <section class="text-style-card" id="prop-label-style">
+              <div class="text-style-header"><h4 data-i18n="property.labelStyle">Label style</h4><div class="text-style-actions"><button id="copy-label-style" type="button" data-i18n="action.copyStyle">Copy</button><button id="paste-label-style" type="button" data-i18n="action.pasteStyle" disabled>Paste</button></div></div>
+              <div class="field-grid">
+                <label><span data-i18n="property.labelColor">Label color</span><input id="prop-label-color" type="color" /></label>
+                <label><span data-i18n="property.labelFontSize">Label size</span><input id="prop-label-font-size" type="number" min="4" max="400" step="0.1" /></label>
+              </div>
+              <div class="field-grid">
+                <label><span data-i18n="property.labelStrokeColor">Label outline</span><input id="prop-label-stroke-color" type="color" /></label>
+                <label><span data-i18n="property.labelStrokeWidth">Outline width</span><input id="prop-label-stroke-width" type="number" min="0" max="30" step="0.5" /></label>
+              </div>
+            </section>
+            <label id="prop-opacity-row"><span><span data-i18n="property.opacity">Opacity</span> <output id="prop-opacity-value">100%</output></span><input id="prop-opacity" type="range" min="5" max="100" /></label>
+            <label id="prop-fit-row"><span data-i18n="property.fit">Media fit</span><select id="prop-fit"><option value="cover">Fill frame (crop)</option><option value="contain">Fit whole media (may show bars)</option><option value="fill">Stretch (distort)</option></select></label>
+            <div id="prop-media-tools" class="media-tools">
+              <label><span><span data-i18n="property.mediaScale">Media zoom</span> <output id="prop-media-scale-value">100%</output></span><input id="prop-media-scale" type="range" min="50" max="400" step="5" /></label>
+              <button id="media-fill-canvas" class="ghost wide" data-i18n="action.fillCanvas">Fill canvas (crop)</button>
+              <small data-i18n="property.mediaZoomHelp">Fill the canvas first, then increase zoom until built-in black bars disappear.</small>
             </div>
-            <div class="field-grid">
-              <label><span data-i18n="property.fontSize">Font size</span><input id="prop-font-size" type="number" min="6" max="300" /></label>
-              <label><span data-i18n="property.radius">Corner radius</span><input id="prop-radius" type="number" min="0" max="200" /></label>
-            </div>
-            <label><span><span data-i18n="property.opacity">Opacity</span> <output id="prop-opacity-value">100%</output></span><input id="prop-opacity" type="range" min="5" max="100" /></label>
-            <label id="prop-fit-row"><span data-i18n="property.fit">Media fit</span><select id="prop-fit"><option value="cover">Cover</option><option value="contain">Contain</option><option value="fill">Stretch</option></select></label>
             <label id="prop-items-row"><span data-i18n="property.items">Task rows</span><input id="prop-max-items" type="number" min="1" max="20" /></label>
             <div class="layer-actions">
               <button class="ghost" id="send-back" data-i18n="action.sendBack">Back</button>
