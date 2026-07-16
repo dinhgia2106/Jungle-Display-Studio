@@ -28,13 +28,21 @@ function buildCommand(command, payload = Buffer.alloc(0)) {
 }
 
 function friendlyPort(port) {
+  const vendorId = String(port.vendorId || '').toUpperCase();
+  const productId = String(port.productId || '').toUpperCase();
+  const definition = deviceProfiles.devices.find((device) =>
+    String(device.vendorId).toUpperCase() === vendorId &&
+    String(device.productId).toUpperCase() === productId);
+  const fingerprint = (port.serialNumber || port.path || 'device').replace(/[^a-z0-9_.:-]/gi, '-');
   return {
+    id: 'jungle-' + vendorId + '-' + productId + '-' + fingerprint,
     path: port.path,
-    vendorId: String(port.vendorId || '').toUpperCase(),
-    productId: String(port.productId || '').toUpperCase(),
+    vendorId,
+    productId,
     serialNumber: port.serialNumber || '',
     manufacturer: port.manufacturer || '',
-    label: `Jungle Display · ${port.path}`
+    label: (definition?.description || 'Jungle Display') + ' - ' + port.path,
+    defaultProfile: definition?.defaultProfile || null
   };
 }
 

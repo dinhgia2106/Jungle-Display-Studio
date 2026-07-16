@@ -1,6 +1,6 @@
 {
   "name": "jungle-display-studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Configurable USB serial dashboard for compatible Jungle Leopard displays.",
   "productName": "Jungle Display Studio",
   "author": "Jungle Display Studio contributors",
@@ -14,7 +14,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "check": "node --check src/main.js && node --check src/jungle-display.js && node --check src/display-profile.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/renderer/display.js",
+    "check": "node --check src/main.js && node --check src/workspace.js && node --check src/jungle-display.js && node --check src/display-profile.js && node --check src/preload.js && node --check src/renderer/i18n.js && node --check src/renderer/app.js && node --check src/renderer/display.js",
     "test": "node test/jungle-display.test.js",
     "pack": "electron-builder --dir --publish never",
     "dist:win": "electron-builder --win nsis msi --x64 --publish never"

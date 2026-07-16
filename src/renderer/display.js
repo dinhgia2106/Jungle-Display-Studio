@@ -1,24 +1,20 @@
 let settings;
+let stats;
 let timer;
 const root = document.getElementById('display-root');
 const isPreview = new URLSearchParams(location.search).get('preview') === '1';
-const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+}[character]));
 
-const TEXT = {
-  en: { tasks: 'TASKS', remaining: '{count} remaining', allDone: '✓ All tasks completed', taskTitle: 'TODAY', uptime: 'UPTIME' },
-  vi: { tasks: 'CÔNG VIỆC', remaining: 'Còn {count} việc', allDone: '✓ Đã hoàn thành tất cả', taskTitle: 'HÔM NAY', uptime: 'UPTIME' }
-};
-
-function t(key, values = {}) {
-  const language = settings?.language === 'vi' ? 'vi' : 'en';
-  let text = TEXT[language][key] || TEXT.en[key] || key;
-  Object.entries(values).forEach(([name, value]) => { text = text.replaceAll(`{${name}}`, value); });
-  return text;
+function activeDisplay() {
+  return settings.displays.find((display) => display.id === settings.activeDisplayId) || settings.displays[0];
 }
 
-function applyRotation() {
-  const rotation = Number(settings?.displayProfile?.rotation) || 0;
-  root.style.transform = !isPreview && rotation === 180 ? 'rotate(180deg)' : 'none';
+function localMediaUrl(source) {
+  const value = String(source || '');
+  if (value.length > 2 && value[1] === ':' && value.charCodeAt(2) === 92) return encodeURI('file:///' + value.split(String.fromCharCode(92)).join('/')).replace(/#/g, '%23');
+  return value;
 }
 
 function youtubeId(url) {
@@ -28,105 +24,110 @@ function youtubeId(url) {
     if (parsed.pathname.startsWith('/shorts/') || parsed.pathname.startsWith('/embed/')) return parsed.pathname.split('/')[2];
     return parsed.searchParams.get('v');
   } catch {
-    return String(url).match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/)?.[1];
+    const value = String(url || '').trim();
+    return value.length === 11 ? value : null;
   }
 }
 
-function localMediaUrl(source) {
-  const value = String(source || '');
-  if (/^[a-zA-Z]:\\/.test(value)) return encodeURI(`file:///${value.replace(/\\/g, '/')}`).replace(/#/g, '%23');
-  return value;
-}
-
-function formatUptime(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
-function clock() {
+function nowInfo() {
   const now = new Date();
   const locale = settings.language === 'vi' ? 'vi-VN' : 'en-GB';
   return {
     time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(now),
-    date: new Intl.DateTimeFormat(locale, { weekday: 'short', day: '2-digit', month: '2-digit' }).format(now)
+    date: new Intl.DateTimeFormat(locale, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).format(now)
   };
 }
 
-function dashboard(stats) {
-  const now = clock();
-  const remaining = settings.todos.filter((task) => !task.done);
-  const portrait = innerHeight > innerWidth;
-  const square = innerWidth / innerHeight <= 1.3;
-  const limit = portrait ? 5 : square ? 4 : 4;
-  const taskRows = remaining.slice(0, limit).map((task, index) => `<li><i>${index + 1}</i><span>${escapeHtml(task.title)}</span></li>`).join('');
-  return `<section class="dashboard">
-    <div class="summary">
-      <div class="clock"><strong>${now.time}</strong><small>${escapeHtml(now.date)}</small></div>
-      <div class="meters">
-        <div><span>CPU</span><b>${stats.cpuPercent}<sup>%</sup></b><i style="--value:${stats.cpuPercent}%"></i></div>
-        <div><span>RAM</span><b>${stats.memoryPercent}<sup>%</sup></b><i style="--value:${stats.memoryPercent}%"></i></div>
-        <div><span>${t('uptime')}</span><b class="uptime-value">${formatUptime(stats.uptime)}</b></div>
-      </div>
-    </div>
-    <div class="dashboard-tasks">
-      <header><strong>${t('tasks')}</strong><small>${t('remaining', { count: remaining.length })}</small></header>
-      <ol>${taskRows || `<li class="all-done"><span>${t('allDone')}</span></li>`}</ol>
-    </div>
-  </section>`;
+function formatUptime(seconds) {
+  const hours = Math.floor((seconds || 0) / 3600);
+  const minutes = Math.floor(((seconds || 0) % 3600) / 60);
+  return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
 }
 
-function taskBoard() {
-  const now = clock();
-  const remaining = settings.todos.filter((task) => !task.done);
-  const limit = innerHeight > innerWidth ? 8 : 5;
-  const items = remaining.slice(0, limit).map((task, index) => `<li><i>${index + 1}</i><span>${escapeHtml(task.title)}</span></li>`).join('');
-  return `<section class="tasks-screen">
-    <header><div><h1>${t('taskTitle')}</h1><strong>${t('remaining', { count: remaining.length })}</strong></div><time>${now.time}</time></header>
-    <ol>${items || `<li class="all-done"><span>${t('allDone')}</span></li>`}</ol>
-  </section>`;
+function metric(type) {
+  if (!stats) return '--';
+  if (type === 'cpu') return stats.cpuPercent + '%';
+  if (type === 'ram') return stats.memoryPercent + '%';
+  if (type === 'gpu') return stats.gpu?.percent == null ? 'N/A' : stats.gpu.percent + '%';
+  return formatUptime(stats.uptime);
 }
 
-async function render() {
-  const content = settings.displayContent || { type: 'dashboard', source: '' };
-  if (content.type === 'video' && content.source) {
-    if (root.dataset.key !== `video:${content.source}`) {
-      root.dataset.key = `video:${content.source}`;
-      root.innerHTML = `<video class="media" src="${escapeHtml(localMediaUrl(content.source))}" autoplay loop muted playsinline></video>`;
-      root.querySelector('video')?.play().catch(() => {});
-    }
-    return;
+function taskMarkup(element) {
+  const remaining = settings.todos.filter((task) => !task.done).slice(0, element.maxItems || 4);
+  if (!remaining.length) return '<li>' + (settings.language === 'vi' ? window.JUNGLE_I18N.dynamicVi.done : 'All tasks completed') + '</li>';
+  return remaining.map((task) => '<li>' + escapeHtml(task.title) + '</li>').join('');
+}
+
+function contentMarkup(element) {
+  const title = element.title ? '<span class="widget-label">' + escapeHtml(element.title) + '</span>' : '';
+  if (element.type === 'video') {
+    return element.source ? '<video src="' + escapeHtml(localMediaUrl(element.source)) + '" autoplay loop muted playsinline style="object-fit:' + element.fit + '"></video>' : '';
   }
-  if (content.type === 'youtube' && youtubeId(content.source)) {
-    const id = youtubeId(content.source);
-    if (root.dataset.key !== `youtube:${id}`) {
-      root.dataset.key = `youtube:${id}`;
-      root.innerHTML = `<iframe class="media" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&controls=0&rel=0&playsinline=1" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
-    }
-    return;
+  if (element.type === 'youtube') {
+    const id = youtubeId(element.source);
+    return id ? '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&mute=1&loop=1&playlist=' + id + '&controls=0&rel=0&playsinline=1" allow="autoplay; encrypted-media"></iframe>' : '';
   }
-  root.dataset.key = content.type;
-  root.innerHTML = content.type === 'tasks' ? taskBoard() : dashboard(await window.jungle.getSystem());
+  if (element.type === 'image') {
+    return element.source ? '<img src="' + escapeHtml(localMediaUrl(element.source)) + '" style="object-fit:' + element.fit + '">' : '';
+  }
+  if (element.type === 'shape') return '';
+  if (element.type === 'tasks') return '<div class="widget-inner task-widget">' + title + '<ol>' + taskMarkup(element) + '</ol></div>';
+  if (element.type === 'text') return '<div class="widget-inner">' + title + '<b class="widget-value multiline">' + escapeHtml(element.text) + '</b></div>';
+  if (element.type === 'clock') return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="clock">' + nowInfo().time + '</b></div>';
+  if (element.type === 'date') return '<div class="widget-inner">' + title + '<b class="widget-value multiline" data-dynamic="date">' + escapeHtml(nowInfo().date) + '</b></div>';
+  return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="' + element.type + '">' + metric(element.type) + '</b></div>';
+}
+
+function renderLayout() {
+  const display = activeDisplay();
+  const canvas = display.canvas;
+  root.style.backgroundColor = canvas.background;
+  const backgroundImage = canvas.backgroundImage ? localMediaUrl(canvas.backgroundImage).replaceAll('"', '%22') : '';
+  root.style.backgroundImage = backgroundImage ? 'url("' + backgroundImage + '")' : 'none';
+  root.style.backgroundSize = 'cover';
+  root.style.backgroundPosition = 'center';
+  root.style.transform = !isPreview && display.profile.rotation === 180 ? 'rotate(180deg)' : 'none';
+  root.innerHTML = '';
+  canvas.elements.slice().sort((a, b) => a.z - b.z).forEach((element) => {
+    const node = document.createElement('section');
+    node.className = 'widget ' + element.type;
+    node.dataset.type = element.type;
+    Object.assign(node.style, {
+      left: element.x + 'px',
+      top: element.y + 'px',
+      width: element.width + 'px',
+      height: element.height + 'px',
+      zIndex: element.z,
+      color: element.color,
+      backgroundColor: element.background,
+      fontSize: element.fontSize + 'px',
+      opacity: element.opacity,
+      borderRadius: element.radius + 'px'
+    });
+    node.innerHTML = contentMarkup(element);
+    root.appendChild(node);
+    node.querySelector('video')?.play().catch(() => {});
+  });
+}
+
+async function updateDynamic() {
+  stats = await window.jungle.getSystem();
+  const now = nowInfo();
+  document.querySelectorAll('[data-dynamic]').forEach((node) => {
+    const type = node.dataset.dynamic;
+    node.textContent = type === 'clock' ? now.time : type === 'date' ? now.date : metric(type);
+  });
 }
 
 async function start() {
   settings = await window.jungle.getSettings();
-  applyRotation();
-  await render();
+  stats = await window.jungle.getSystem();
+  renderLayout();
   clearInterval(timer);
-  timer = setInterval(() => {
-    const type = settings.displayContent?.type;
-    if (type === 'dashboard' || type === 'tasks') render();
-  }, 1000);
-  window.addEventListener('resize', () => {
-    const type = settings.displayContent?.type;
-    if (type === 'dashboard' || type === 'tasks') render();
-  });
-  window.jungle.onSettings(async (next) => {
+  timer = setInterval(updateDynamic, 1000);
+  window.jungle.onSettings((next) => {
     settings = next;
-    applyRotation();
-    root.dataset.key = '';
-    await render();
+    renderLayout();
   });
 }
 

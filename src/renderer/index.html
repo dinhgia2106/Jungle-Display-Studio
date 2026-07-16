@@ -11,16 +11,17 @@
     <div class="brand"><span>J</span><div><strong>Jungle Display</strong><small>STUDIO</small></div></div>
     <nav>
       <button class="nav active" data-panel="overview" data-i18n="nav.overview">Overview</button>
-      <button class="nav" data-panel="content" data-i18n="nav.content">Content</button>
+      <button class="nav" data-panel="canvas" data-i18n="nav.canvas">Canvas</button>
       <button class="nav" data-panel="tasks" data-i18n="nav.tasks">Tasks</button>
       <button class="nav" data-panel="display" data-i18n="nav.display">Display</button>
       <button class="nav" data-panel="settings" data-i18n="nav.settings">Settings</button>
     </nav>
+    <div class="sidebar-foot"><i></i><span id="sidebar-status">Disconnected</span></div>
   </aside>
 
   <main>
     <header class="app-header">
-      <div><p class="eyebrow" data-i18n="app.subtitle">JUNGLE USB DISPLAY</p><h1>Jungle Display Studio</h1></div>
+      <div><p class="eyebrow" data-i18n="app.subtitle">JUNGLE USB WORKSPACE</p><h1>Jungle Display Studio</h1></div>
       <div class="header-tools">
         <select id="language" aria-label="Language"><option value="en">English</option><option value="vi">Tiếng Việt</option></select>
         <time id="clock">--:--:--</time>
@@ -28,59 +29,113 @@
     </header>
 
     <section class="panel active" id="overview">
-      <article class="hero">
-        <div>
-          <span class="status-pill" id="status-pill"><i></i><span data-i18n="status.disconnected">Not connected</span></span>
-          <h2><span data-i18n="hero.line1">Your display,</span><br><em data-i18n="hero.line2">your layout.</em></h2>
-          <p id="status-message"></p>
-          <div class="actions">
-            <button class="primary" id="connect-main" data-i18n="action.connect">Connect display</button>
-            <button class="ghost" id="disconnect-main" disabled data-i18n="action.disconnect">Disconnect</button>
-            <button class="ghost" id="preview-main" data-i18n="action.preview">Preview</button>
-          </div>
-        </div>
-        <div class="screen-art"><div class="screen-inner"><b>JUNGLE</b><span id="hero-profile">960 × 480</span></div></div>
-      </article>
-
+      <div class="section-heading">
+        <div><p class="eyebrow" data-i18n="overview.eyebrow">CONNECTED WORKSPACE</p><h2 data-i18n="overview.title">Your Jungle displays</h2><p data-i18n="overview.help">Scan, select and connect the screen you want to edit.</p></div>
+        <div class="heading-actions"><button class="ghost" id="preview-main" data-i18n="action.preview">Preview</button><button class="primary" id="scan-devices" data-i18n="action.scan">Scan displays</button></div>
+      </div>
+      <div id="device-grid" class="device-grid"></div>
       <div class="stats-grid">
         <article><small>CPU</small><strong id="cpu-stat">--%</strong><span id="cpu-name">--</span></article>
         <article><small>RAM</small><strong id="ram-stat">--%</strong><span id="ram-detail">-- / -- GB</span></article>
-        <article><small data-i18n="stats.stream">STREAM</small><strong id="stream-stat">0 FPS</strong><span id="frame-detail" data-i18n="stats.noFrame">No frame yet</span></article>
+        <article><small>GPU</small><strong id="gpu-stat">--</strong><span id="gpu-name">--</span></article>
+        <article><small data-i18n="stats.stream">STREAM</small><strong id="stream-stat">0 FPS</strong><span id="frame-detail">--</span></article>
       </div>
     </section>
 
-    <section class="panel" id="content">
-      <div class="section-heading"><div><p class="eyebrow" data-i18n="content.eyebrow">MEDIA & DASHBOARD</p><h2 data-i18n="content.title">Display content</h2></div><button class="ghost" id="preview-content" data-i18n="action.preview">Preview</button></div>
-      <article class="form-card">
-        <label><span data-i18n="content.mode">Mode</span>
-          <select id="content-type">
-            <option value="dashboard" data-i18n="mode.dashboard">System dashboard</option>
-            <option value="tasks" data-i18n="mode.tasks">Task list</option>
-            <option value="video" data-i18n="mode.video">Local video</option>
-            <option value="youtube" data-i18n="mode.youtube">YouTube video</option>
-          </select>
-        </label>
-        <label id="source-label"><span data-i18n="content.source">Media source</span>
-          <div class="source-row"><input id="content-source" /><button class="ghost" id="pick-file" data-i18n="action.chooseFile">Choose file</button></div>
-        </label>
-        <div class="content-help" id="content-help"></div>
-        <button class="primary wide" id="save-content" data-i18n="action.saveContent">Save content</button>
-      </article>
+    <section class="panel canvas-panel" id="canvas">
+      <div class="section-heading canvas-heading">
+        <div><p class="eyebrow" data-i18n="canvas.eyebrow">FREEFORM EDITOR</p><h2 data-i18n="canvas.title">Canvas layout</h2></div>
+        <div class="heading-actions">
+          <select id="canvas-display-select" aria-label="Display"></select>
+          <select id="canvas-zoom" aria-label="Zoom"><option value="fit">Fit</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select>
+          <button class="ghost" id="preview-canvas" data-i18n="action.preview">Preview</button>
+        </div>
+      </div>
+
+      <div class="editor-shell">
+        <aside class="palette">
+          <h3 data-i18n="canvas.add">Add element</h3>
+          <div class="palette-grid">
+            <button data-add="text"><b>T</b><span data-i18n="element.text">Text</span></button>
+            <button data-add="clock"><b>12:30</b><span data-i18n="element.clock">Clock</span></button>
+            <button data-add="date"><b>31</b><span data-i18n="element.date">Date</span></button>
+            <button data-add="cpu"><b>CPU</b><span>CPU</span></button>
+            <button data-add="ram"><b>RAM</b><span>RAM</span></button>
+            <button data-add="gpu"><b>GPU</b><span>GPU</span></button>
+            <button data-add="uptime"><b>UP</b><span>Uptime</span></button>
+            <button data-add="tasks"><b>✓</b><span data-i18n="element.tasks">Tasks</span></button>
+            <button data-add="video"><b>▶</b><span data-i18n="element.video">Video</span></button>
+            <button data-add="youtube"><b>YT</b><span>YouTube</span></button>
+            <button data-add="image"><b>▧</b><span data-i18n="element.image">Image</span></button>
+            <button data-add="shape"><b>■</b><span data-i18n="element.shape">Shape</span></button>
+          </div>
+          <hr />
+          <label><span data-i18n="canvas.background">Canvas background</span><input id="canvas-background" type="color" value="#071019" /></label>
+          <label><span data-i18n="canvas.backgroundImage">Background image</span><div class="input-action"><input id="canvas-background-image" /><button id="pick-background" class="icon-button">…</button></div></label>
+          <button class="ghost wide" id="clear-background" data-i18n="action.clearBackground">Clear image</button>
+          <button class="danger-soft wide" id="reset-layout" data-i18n="action.resetLayout">Reset layout</button>
+        </aside>
+
+        <div class="canvas-workarea">
+          <div class="canvas-meta"><span id="canvas-name">Display</span><b id="canvas-size">960 × 480</b><span id="save-indicator" data-i18n="canvas.saved">Saved</span></div>
+          <div id="canvas-viewport" class="canvas-viewport">
+            <div id="canvas-stage-wrap"><div id="layout-canvas"></div></div>
+          </div>
+        </div>
+
+        <aside class="inspector">
+          <h3 data-i18n="canvas.properties">Properties</h3>
+          <div id="inspector-empty" class="inspector-empty" data-i18n="canvas.selectHint">Select an element on the canvas.</div>
+          <div id="inspector-fields" hidden>
+            <div class="inspector-type"><span id="prop-type">TEXT</span><small id="prop-id"></small></div>
+            <label><span data-i18n="property.title">Label</span><input id="prop-title" maxlength="80" /></label>
+            <label id="prop-text-row"><span data-i18n="property.text">Text</span><textarea id="prop-text" maxlength="500"></textarea></label>
+            <label id="prop-source-row"><span data-i18n="property.source">Source</span><div class="input-action"><input id="prop-source" /><button id="pick-source" class="icon-button">…</button></div></label>
+            <div class="field-grid four">
+              <label><span>X</span><input id="prop-x" type="number" min="0" /></label>
+              <label><span>Y</span><input id="prop-y" type="number" min="0" /></label>
+              <label><span>W</span><input id="prop-width" type="number" min="40" /></label>
+              <label><span>H</span><input id="prop-height" type="number" min="32" /></label>
+            </div>
+            <div class="field-grid">
+              <label><span data-i18n="property.color">Text color</span><input id="prop-color" type="color" /></label>
+              <label><span data-i18n="property.background">Background</span><input id="prop-background" type="color" /></label>
+            </div>
+            <div class="field-grid">
+              <label><span data-i18n="property.fontSize">Font size</span><input id="prop-font-size" type="number" min="6" max="300" /></label>
+              <label><span data-i18n="property.radius">Corner radius</span><input id="prop-radius" type="number" min="0" max="200" /></label>
+            </div>
+            <label><span><span data-i18n="property.opacity">Opacity</span> <output id="prop-opacity-value">100%</output></span><input id="prop-opacity" type="range" min="5" max="100" /></label>
+            <label id="prop-fit-row"><span data-i18n="property.fit">Media fit</span><select id="prop-fit"><option value="cover">Cover</option><option value="contain">Contain</option><option value="fill">Stretch</option></select></label>
+            <label id="prop-items-row"><span data-i18n="property.items">Task rows</span><input id="prop-max-items" type="number" min="1" max="20" /></label>
+            <div class="layer-actions">
+              <button class="ghost" id="send-back" data-i18n="action.sendBack">Back</button>
+              <button class="ghost" id="bring-front" data-i18n="action.bringFront">Front</button>
+              <button class="ghost" id="duplicate-element" data-i18n="action.duplicate">Duplicate</button>
+            </div>
+            <button class="danger wide" id="delete-element" data-i18n="action.delete">Delete element</button>
+          </div>
+        </aside>
+      </div>
     </section>
 
     <section class="panel" id="tasks">
-      <div class="section-heading"><div><p class="eyebrow">TODO LIST</p><h2 data-i18n="tasks.title">Tasks</h2></div><p id="task-count"></p></div>
+      <div class="section-heading"><div><p class="eyebrow">TODO LIST</p><h2 data-i18n="tasks.title">Shared tasks</h2><p data-i18n="tasks.help">Task elements can show this list on any display.</p></div><p id="task-count"></p></div>
       <form id="task-form" class="task-form"><input id="task-input" maxlength="100" data-i18n-placeholder="tasks.placeholder" placeholder="Add a task…" autocomplete="off" /><button class="primary" data-i18n="action.addTask">Add task</button></form>
       <div id="task-list" class="task-list"></div>
     </section>
 
     <section class="panel" id="display">
-      <div class="section-heading"><div><p class="eyebrow" data-i18n="display.eyebrow">DEVICE & CANVAS</p><h2 data-i18n="display.title">Display configuration</h2></div><button class="ghost" id="scan-device" data-i18n="action.scan">Scan</button></div>
+      <div class="section-heading">
+        <div><p class="eyebrow" data-i18n="display.eyebrow">DEVICE PROFILE</p><h2 data-i18n="display.title">Display configuration</h2><p data-i18n="display.help">Each saved display keeps its own resolution, brightness and canvas.</p></div>
+        <div class="heading-actions"><button class="ghost" id="scan-display" data-i18n="action.scan">Scan</button><button class="danger-soft" id="reset-profile" data-i18n="action.resetProfile">Reset detected profile</button></div>
+      </div>
       <article class="form-card display-form">
-        <label><span data-i18n="display.port">USB device</span><select id="port-select"><option value="auto" data-i18n="display.auto">Auto detect</option></select></label>
+        <label><span data-i18n="display.active">Display</span><select id="config-display-select"></select></label>
+        <label><span data-i18n="display.port">USB port</span><select id="port-select"><option value="auto">Auto detect</option></select></label>
         <label><span data-i18n="display.preset">Resolution preset</span>
           <select id="display-preset">
-            <option value="960x480">960 × 480 — 5.5&quot; landscape</option>
+            <option value="960x480">960 × 480 — landscape</option>
             <option value="800x480">800 × 480 — landscape</option>
             <option value="480x480">480 × 480 — square</option>
             <option value="480x800">480 × 800 — portrait</option>
@@ -89,33 +144,35 @@
           </select>
         </label>
         <label><span data-i18n="display.name">Display name</span><input id="display-name" maxlength="80" /></label>
-        <div class="field-pair">
+        <div class="field-grid">
           <label><span data-i18n="display.width">Width</span><input id="display-width" type="number" min="240" max="3840" /></label>
           <label><span data-i18n="display.height">Height</span><input id="display-height" type="number" min="240" max="2160" /></label>
         </div>
-        <div class="field-pair">
+        <div class="field-grid">
           <label><span data-i18n="display.rotation">Rotation</span><select id="rotation"><option value="0">0°</option><option value="180">180°</option></select></label>
           <label><span data-i18n="display.frameLimit">JPEG limit (KB)</span><input id="frame-limit" type="number" min="10" max="250" /></label>
         </div>
-        <label><span><span data-i18n="display.brightness">Brightness</span> <output id="brightness-value">100%</output></span><input id="brightness" type="range" min="0" max="100" value="100" /></label>
+        <label><span><span data-i18n="display.brightness">Brightness</span> <output id="brightness-value">100%</output></span><input id="brightness" type="range" min="0" max="100" /></label>
         <button class="primary wide" id="save-display" data-i18n="action.saveDisplay">Save display</button>
       </article>
-      <p class="tip" data-i18n="display.help">Choose a preset or enter the exact native resolution printed by your display. Custom sizes are supported.</p>
+      <p class="tip" data-i18n="display.resetHelp">Reset uses the device profile captured when it was first scanned. USB serial devices that do not report dimensions use the open device profile table as fallback.</p>
     </section>
+
     <section class="panel" id="settings">
-      <div class="section-heading"><div><p class="eyebrow" data-i18n="settings.eyebrow">STARTUP & CONNECTION</p><h2 data-i18n="settings.title">Application settings</h2></div></div>
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="settings.eyebrow">STARTUP & BEHAVIOR</p><h2 data-i18n="settings.title">Application settings</h2></div></div>
       <article class="form-card settings-form">
-        <label class="setting-toggle"><input id="launch-at-login" type="checkbox" /><span><b data-i18n="settings.launchAtLogin">Launch at Windows startup</b><small data-i18n="settings.launchAtLoginHelp">Start Jungle Display Studio after you sign in.</small></span></label>
-        <label class="setting-toggle"><input id="auto-connect" type="checkbox" /><span><b data-i18n="settings.autoConnect">Auto-connect display</b><small data-i18n="settings.autoConnectHelp">Connect to the last selected USB display when the app starts.</small></span></label>
-        <label class="setting-toggle"><input id="auto-reconnect" type="checkbox" /><span><b data-i18n="settings.autoReconnect">Auto-reconnect</b><small data-i18n="settings.autoReconnectHelp">Reconnect automatically if an active display connection is lost.</small></span></label>
-        <label><span data-i18n="settings.reconnectDelay">Reconnect delay (seconds)</span><input id="reconnect-delay" type="number" min="2" max="60" /></label>
-        <label class="setting-toggle"><input id="open-preview" type="checkbox" /><span><b data-i18n="settings.openPreview">Open preview on launch</b><small data-i18n="settings.openPreviewHelp">Open a scaled preview window when the app starts.</small></span></label>
+        <label class="setting-toggle"><input id="launch-at-login" type="checkbox" /><span><b data-i18n="settings.launch">Launch with Windows</b><small data-i18n="settings.launchHelp">Start the installed app when you sign in.</small></span></label>
+        <label class="setting-toggle"><input id="auto-connect" type="checkbox" /><span><b data-i18n="settings.autoConnect">Connect active display on launch</b><small data-i18n="settings.autoConnectHelp">Uses the selected display and its saved USB port.</small></span></label>
+        <label class="setting-toggle"><input id="auto-reconnect" type="checkbox" /><span><b data-i18n="settings.reconnect">Reconnect after interruption</b><small data-i18n="settings.reconnectHelp">Retry when a previously connected screen disappears.</small></span></label>
+        <label><span data-i18n="settings.delay">Reconnect delay (seconds)</span><input id="reconnect-delay" type="number" min="2" max="60" /></label>
+        <label class="setting-toggle"><input id="open-preview" type="checkbox" /><span><b data-i18n="settings.preview">Open preview on launch</b><small data-i18n="settings.previewHelp">Show the active canvas when the app starts.</small></span></label>
         <button class="primary wide" id="save-settings" data-i18n="action.saveSettings">Save settings</button>
       </article>
     </section>
   </main>
 
-  <div class="toast" id="toast"></div>
+  <div id="toast" class="toast"></div>
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

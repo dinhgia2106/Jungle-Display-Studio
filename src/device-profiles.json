@@ -4,12 +4,26 @@
     {
       "vendorId": "33C3",
       "productId": "7788",
-      "description": "Jungle Leopard USB Serial display"
+      "description": "Jungle Leopard USB Serial display",
+      "defaultProfile": {
+        "preset": "960x480",
+        "name": "Jungle Display",
+        "width": 960,
+        "height": 480,
+        "rotation": 180
+      }
     },
     {
       "vendorId": "33C3",
       "productId": "7792",
-      "description": "Jungle Leopard USB Serial display"
+      "description": "Jungle Leopard USB Serial display",
+      "defaultProfile": {
+        "preset": "960x480",
+        "name": "Jungle Display",
+        "width": 960,
+        "height": 480,
+        "rotation": 180
+      }
     }
   ]
 }
