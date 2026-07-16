@@ -1,0 +1,78 @@
+:root { --mint: #62edab; --muted: #9bb4aa; }
+* { box-sizing: border-box; }
+html, body, #display-root {
+  width: 100%; height: 100%; margin: 0; overflow: hidden;
+  background: #071019; color: #effaf5; font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+#display-root { transform-origin: center center; }
+.media { display: block; width: 100%; height: 100%; border: 0; object-fit: cover; }
+
+.dashboard {
+  width: 100%; height: 100%; padding: 2.5vh 1.7vw;
+  display: grid; grid-template-rows: 31vh 1fr; gap: 2vh;
+  background: radial-gradient(circle at 82% 5%, #174a42 0, transparent 34%), linear-gradient(125deg, #0d1b28, #061018 72%);
+}
+.summary { min-height: 0; display: grid; grid-template-columns: 31% 1fr; gap: 1vw; }
+.clock { min-width: 0; padding: 0 .8vw; display: flex; flex-direction: column; justify-content: center; }
+.clock strong { display: block; font: 800 min(10.8vw, 22vh)/.84 ui-monospace, Consolas; letter-spacing: -.9vw; }
+.clock small { display: block; margin-top: 2.7vh; color: #bad0c7; font-size: min(2.1vw, 4.2vh); font-weight: 700; text-transform: capitalize; }
+.meters { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: .8vw; }
+.meters > div {
+  position: relative; min-width: 0; height: 100%; padding: 1.5vh 1.3vw;
+  display: flex; flex-direction: column; justify-content: center;
+  border: max(1px,.12vw) solid rgba(142,231,190,.24); border-radius: min(1.2vw,2.4vh);
+  background: rgba(10,29,38,.9); overflow: hidden;
+}
+.meters span { display: block; margin-bottom: 1.4vh; color: var(--mint); font-size: min(1.8vw,3.6vh); font-weight: 800; letter-spacing: .12vw; }
+.meters b { display: block; font-size: min(7vw,14vh); line-height: .88; }
+.meters b sup { margin-left: .2vw; color: var(--mint); font-size: min(2.8vw,5.6vh); }
+.meters .uptime-value { font: 800 min(5vw,10vh)/.95 ui-monospace, Consolas; letter-spacing: -.3vw; }
+.meters > div > i { position: absolute; left: 0; bottom: 0; width: var(--value); height: max(3px,1vh); background: var(--mint); box-shadow: 0 0 1.3vw var(--mint); }
+.dashboard-tasks { min-height: 0; padding: 1.8vh 1.3vw; border: max(1px,.1vw) solid rgba(98,237,171,.25); border-radius: min(1.1vw,2.2vh); background: rgba(7,27,24,.88); }
+.dashboard-tasks header { height: 5.8vh; display: flex; align-items: center; justify-content: space-between; }
+.dashboard-tasks header strong { color: var(--mint); font-size: min(1.7vw,3.4vh); letter-spacing: .12vw; }
+.dashboard-tasks header small { color: #b8cfc5; font-size: min(1.55vw,3.1vh); font-weight: 700; }
+.dashboard-tasks ol { margin: 1vh 0 0; padding: 0; display: grid; grid-auto-rows: 10.4vh; align-content: start; gap: 1vh; list-style: none; overflow: hidden; }
+.dashboard-tasks li { min-width: 0; padding: .8vh 1.2vw; display: flex; align-items: center; gap: 1.2vw; border-radius: min(.9vw,1.8vh); background: #102d32; }
+.dashboard-tasks li i { flex: 0 0 min(3.4vw,6.8vh); height: min(3.4vw,6.8vh); display: grid; place-items: center; border-radius: min(.7vw,1.4vh); background: #17463a; color: var(--mint); font: 800 min(1.5vw,3vh) ui-monospace; }
+.dashboard-tasks li span { overflow: hidden; font-size: min(2.3vw,4.6vh); font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+.all-done { justify-content: center; color: var(--mint); }
+
+.tasks-screen { width: 100%; height: 100%; padding: 2.5vh 1.7vw; display: flex; flex-direction: column; background: radial-gradient(circle at 85% 8%, #173b36, transparent 34%), linear-gradient(140deg, #0b1823, #071019); }
+.tasks-screen header { min-height: 14vh; padding: 0 .8vw 1.8vh; display: flex; align-items: center; justify-content: space-between; border-bottom: max(1px,.1vw) solid rgba(121,219,176,.24); }
+.tasks-screen h1 { margin: 0; color: #f4fff9; font-size: min(4vw,8vh); line-height: 1; }
+.tasks-screen header strong { display: block; margin-top: 1vh; color: var(--mint); font-size: min(1.9vw,3.8vh); }
+.tasks-screen time { font: 800 min(6vw,12vh)/1 ui-monospace, Consolas; letter-spacing: -.5vw; }
+.tasks-screen ol { flex: 1; margin: 1.6vh 0 0; padding: 0; display: grid; grid-auto-rows: 14.5vh; align-content: start; gap: 1.4vh; overflow: hidden; list-style: none; }
+.tasks-screen li { min-width: 0; padding: 1.2vh 1.5vw; display: flex; align-items: center; gap: 1.5vw; border-radius: min(1vw,2vh); background: #102832; }
+.tasks-screen li i { flex: 0 0 min(4.4vw,8.8vh); height: min(4.4vw,8.8vh); display: grid; place-items: center; border-radius: min(.9vw,1.8vh); background: #17463a; color: var(--mint); font: 800 min(1.9vw,3.8vh) ui-monospace; }
+.tasks-screen li span { overflow: hidden; font-size: min(3vw,6vh); font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+
+@media (max-aspect-ratio: 4/3) {
+  .dashboard { padding: 1.7vh 2.5vw; grid-template-rows: 42vh 1fr; gap: 1.5vh; }
+  .summary { grid-template-columns: 1fr; grid-template-rows: 16vh 1fr; gap: 1vh; }
+  .clock { padding: 0 2vw; flex-direction: row; align-items: center; justify-content: space-between; }
+  .clock strong { font-size: min(16vw,12vh); letter-spacing: -1.2vw; }
+  .clock small { margin: 0; max-width: 36%; font-size: min(4vw,3vh); text-align: right; }
+  .meters { gap: 1.5vw; }
+  .meters > div { padding: 1vh 2vw; }
+  .meters span { font-size: min(3.4vw,2.6vh); margin-bottom: 1vh; }
+  .meters b { font-size: min(11vw,8.2vh); }
+  .meters b sup { font-size: min(4vw,3vh); }
+  .meters .uptime-value { font-size: min(8.5vw,6.4vh); }
+  .dashboard-tasks { padding: 1.2vh 2.2vw; }
+  .dashboard-tasks header { height: 4.5vh; }
+  .dashboard-tasks header strong,.dashboard-tasks header small { font-size: min(3.5vw,2.6vh); }
+  .dashboard-tasks ol { grid-auto-rows: 8.2vh; gap: .8vh; }
+  .dashboard-tasks li { padding: .5vh 2vw; gap: 2vw; }
+  .dashboard-tasks li i { flex-basis: min(7vw,5.2vh); height: min(7vw,5.2vh); font-size: min(3vw,2.2vh); }
+  .dashboard-tasks li span { font-size: min(4.5vw,3.4vh); }
+  .tasks-screen { padding: 1.7vh 2.5vw; }
+  .tasks-screen header { min-height: 10vh; }
+  .tasks-screen h1 { font-size: min(8vw,6vh); }
+  .tasks-screen header strong { font-size: min(4vw,3vh); }
+  .tasks-screen time { font-size: min(12vw,9vh); }
+  .tasks-screen ol { grid-auto-rows: 9.5vh; gap: 1vh; }
+  .tasks-screen li i { flex-basis: min(8vw,6vh); height: min(8vw,6vh); font-size: min(3.8vw,2.8vh); }
+  .tasks-screen li span { font-size: min(5vw,3.8vh); }
+}

@@ -1,0 +1,15 @@
+{
+  "baudRate": 2000000,
+  "devices": [
+    {
+      "vendorId": "33C3",
+      "productId": "7788",
+      "description": "Jungle Leopard USB Serial display"
+    },
+    {
+      "vendorId": "33C3",
+      "productId": "7792",
+      "description": "Jungle Leopard USB Serial display"
+    }
+  ]
+}

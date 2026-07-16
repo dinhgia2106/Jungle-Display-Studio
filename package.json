@@ -1,0 +1,72 @@
+{
+  "name": "jungle-display-studio",
+  "version": "1.1.0",
+  "description": "Configurable USB serial dashboard for compatible Jungle Leopard displays.",
+  "productName": "Jungle Display Studio",
+  "author": "Jungle Display Studio contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/dinhgia2106/Jungle-Display-Studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dinhgia2106/Jungle-Display-Studio.git"
+  },
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check": "node --check src/main.js && node --check src/jungle-display.js && node --check src/display-profile.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/renderer/display.js",
+    "test": "node test/jungle-display.test.js",
+    "pack": "electron-builder --dir --publish never",
+    "dist:win": "electron-builder --win nsis msi --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0"
+  },
+  "build": {
+    "appId": "io.github.dinhgia2106.jungle-display-studio",
+    "productName": "Jungle Display Studio",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@serialport/**/*"
+    ],
+    "files": [
+      "src/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Jungle-Display-Studio-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jungle Display Studio</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span>J</span><div><strong>Jungle Display</strong><small>STUDIO</small></div></div>
+    <nav>
+      <button class="nav active" data-panel="overview" data-i18n="nav.overview">Overview</button>
+      <button class="nav" data-panel="content" data-i18n="nav.content">Content</button>
+      <button class="nav" data-panel="tasks" data-i18n="nav.tasks">Tasks</button>
+      <button class="nav" data-panel="display" data-i18n="nav.display">Display</button>
+      <button class="nav" data-panel="settings" data-i18n="nav.settings">Settings</button>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="app-header">
+      <div><p class="eyebrow" data-i18n="app.subtitle">JUNGLE USB DISPLAY</p><h1>Jungle Display Studio</h1></div>
+      <div class="header-tools">
+        <select id="language" aria-label="Language"><option value="en">English</option><option value="vi">Tiếng Việt</option></select>
+        <time id="clock">--:--:--</time>
+      </div>
+    </header>
+
+    <section class="panel active" id="overview">
+      <article class="hero">
+        <div>
+          <span class="status-pill" id="status-pill"><i></i><span data-i18n="status.disconnected">Not connected</span></span>
+          <h2><span data-i18n="hero.line1">Your display,</span><br><em data-i18n="hero.line2">your layout.</em></h2>
+          <p id="status-message"></p>
+          <div class="actions">
+            <button class="primary" id="connect-main" data-i18n="action.connect">Connect display</button>
+            <button class="ghost" id="disconnect-main" disabled data-i18n="action.disconnect">Disconnect</button>
+            <button class="ghost" id="preview-main" data-i18n="action.preview">Preview</button>
+          </div>
+        </div>
+        <div class="screen-art"><div class="screen-inner"><b>JUNGLE</b><span id="hero-profile">960 × 480</span></div></div>
+      </article>
+
+      <div class="stats-grid">
+        <article><small>CPU</small><strong id="cpu-stat">--%</strong><span id="cpu-name">--</span></article>
+        <article><small>RAM</small><strong id="ram-stat">--%</strong><span id="ram-detail">-- / -- GB</span></article>
+        <article><small data-i18n="stats.stream">STREAM</small><strong id="stream-stat">0 FPS</strong><span id="frame-detail" data-i18n="stats.noFrame">No frame yet</span></article>
+      </div>
+    </section>
+
+    <section class="panel" id="content">
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="content.eyebrow">MEDIA & DASHBOARD</p><h2 data-i18n="content.title">Display content</h2></div><button class="ghost" id="preview-content" data-i18n="action.preview">Preview</button></div>
+      <article class="form-card">
+        <label><span data-i18n="content.mode">Mode</span>
+          <select id="content-type">
+            <option value="dashboard" data-i18n="mode.dashboard">System dashboard</option>
+            <option value="tasks" data-i18n="mode.tasks">Task list</option>
+            <option value="video" data-i18n="mode.video">Local video</option>
+            <option value="youtube" data-i18n="mode.youtube">YouTube video</option>
+          </select>
+        </label>
+        <label id="source-label"><span data-i18n="content.source">Media source</span>
+          <div class="source-row"><input id="content-source" /><button class="ghost" id="pick-file" data-i18n="action.chooseFile">Choose file</button></div>
+        </label>
+        <div class="content-help" id="content-help"></div>
+        <button class="primary wide" id="save-content" data-i18n="action.saveContent">Save content</button>
+      </article>
+    </section>
+
+    <section class="panel" id="tasks">
+      <div class="section-heading"><div><p class="eyebrow">TODO LIST</p><h2 data-i18n="tasks.title">Tasks</h2></div><p id="task-count"></p></div>
+      <form id="task-form" class="task-form"><input id="task-input" maxlength="100" data-i18n-placeholder="tasks.placeholder" placeholder="Add a task…" autocomplete="off" /><button class="primary" data-i18n="action.addTask">Add task</button></form>
+      <div id="task-list" class="task-list"></div>
+    </section>
+
+    <section class="panel" id="display">
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="display.eyebrow">DEVICE & CANVAS</p><h2 data-i18n="display.title">Display configuration</h2></div><button class="ghost" id="scan-device" data-i18n="action.scan">Scan</button></div>
+      <article class="form-card display-form">
+        <label><span data-i18n="display.port">USB device</span><select id="port-select"><option value="auto" data-i18n="display.auto">Auto detect</option></select></label>
+        <label><span data-i18n="display.preset">Resolution preset</span>
+          <select id="display-preset">
+            <option value="960x480">960 × 480 — 5.5&quot; landscape</option>
+            <option value="800x480">800 × 480 — landscape</option>
+            <option value="480x480">480 × 480 — square</option>
+            <option value="480x800">480 × 800 — portrait</option>
+            <option value="1920x480">1920 × 480 — ultra-wide</option>
+            <option value="custom" data-i18n="display.custom">Custom</option>
+          </select>
+        </label>
+        <label><span data-i18n="display.name">Display name</span><input id="display-name" maxlength="80" /></label>
+        <div class="field-pair">
+          <label><span data-i18n="display.width">Width</span><input id="display-width" type="number" min="240" max="3840" /></label>
+          <label><span data-i18n="display.height">Height</span><input id="display-height" type="number" min="240" max="2160" /></label>
+        </div>
+        <div class="field-pair">
+          <label><span data-i18n="display.rotation">Rotation</span><select id="rotation"><option value="0">0°</option><option value="180">180°</option></select></label>
+          <label><span data-i18n="display.frameLimit">JPEG limit (KB)</span><input id="frame-limit" type="number" min="10" max="250" /></label>
+        </div>
+        <label><span><span data-i18n="display.brightness">Brightness</span> <output id="brightness-value">100%</output></span><input id="brightness" type="range" min="0" max="100" value="100" /></label>
+        <button class="primary wide" id="save-display" data-i18n="action.saveDisplay">Save display</button>
+      </article>
+      <p class="tip" data-i18n="display.help">Choose a preset or enter the exact native resolution printed by your display. Custom sizes are supported.</p>
+    </section>
+    <section class="panel" id="settings">
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="settings.eyebrow">STARTUP & CONNECTION</p><h2 data-i18n="settings.title">Application settings</h2></div></div>
+      <article class="form-card settings-form">
+        <label class="setting-toggle"><input id="launch-at-login" type="checkbox" /><span><b data-i18n="settings.launchAtLogin">Launch at Windows startup</b><small data-i18n="settings.launchAtLoginHelp">Start Jungle Display Studio after you sign in.</small></span></label>
+        <label class="setting-toggle"><input id="auto-connect" type="checkbox" /><span><b data-i18n="settings.autoConnect">Auto-connect display</b><small data-i18n="settings.autoConnectHelp">Connect to the last selected USB display when the app starts.</small></span></label>
+        <label class="setting-toggle"><input id="auto-reconnect" type="checkbox" /><span><b data-i18n="settings.autoReconnect">Auto-reconnect</b><small data-i18n="settings.autoReconnectHelp">Reconnect automatically if an active display connection is lost.</small></span></label>
+        <label><span data-i18n="settings.reconnectDelay">Reconnect delay (seconds)</span><input id="reconnect-delay" type="number" min="2" max="60" /></label>
+        <label class="setting-toggle"><input id="open-preview" type="checkbox" /><span><b data-i18n="settings.openPreview">Open preview on launch</b><small data-i18n="settings.openPreviewHelp">Open a scaled preview window when the app starts.</small></span></label>
+        <button class="primary wide" id="save-settings" data-i18n="action.saveSettings">Save settings</button>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
