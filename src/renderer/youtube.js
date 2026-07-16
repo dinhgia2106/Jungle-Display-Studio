@@ -35,7 +35,7 @@
   function scheduleRetry(frame, delay = 12000) {
     clearRetry(frame);
     frame.__jungleRetryTimer = setTimeout(() => {
-      if (!frame.isConnected || frame.dataset.youtubeReady === '1') {
+      if (!frame.isConnected || frame.dataset.youtubeLoaded === '1') {
         frames.delete(frame);
         return;
       }
@@ -43,6 +43,7 @@
       frame.dataset.youtubeAttempt = String(attempt);
       if (attempt > MAX_RETRIES) return;
       const id = frame.dataset.youtubeId;
+      frame.dataset.youtubeLoaded = '0';
       frame.src = embedUrl(id, Date.now() + '-' + attempt);
       scheduleRetry(frame, Math.min(30000, 10000 + attempt * 4000));
     }, delay);
@@ -61,7 +62,8 @@
     frame.id ||= 'jungle-youtube-' + Math.random().toString(36).slice(2);
     frames.add(frame);
     frame.addEventListener('load', () => {
-      frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeLoaded = '1';
+      clearRetry(frame);
       setTimeout(() => frame.isConnected && requestPlayerEvents(frame), 250);
     });
     scheduleRetry(frame);
@@ -76,7 +78,7 @@
     let data = event.data;
     try { if (typeof data === 'string') data = JSON.parse(data); } catch { return; }
     if (data?.event === 'onError') {
-      frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeLoaded = '0';
       scheduleRetry(frame, 1500);
       return;
     }
