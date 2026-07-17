@@ -12,7 +12,9 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - Freeform canvas editor with drag, resize, exact position and layer controls.
 - Shift-click multi-selection with edge/center alignment and equal horizontal or vertical gaps.
 - Context-aware properties show only the controls supported by the selected element.
-- Clock, date, text, CPU, RAM, GPU, uptime, tasks, shape, image, local video and YouTube elements.
+- Clock, date, text, CPU, RAM, GPU, uptime, tasks, calendar reminders, shape, image, local video and YouTube elements.
+- Local calendar with Today, Upcoming and All Events views; events can be edited or deleted, with optional times and daily, weekly, monthly or yearly recurrence. Annual events only require a day and month.
+- Task and calendar widgets scroll overflowing row text horizontally, wait 3.5 seconds after the longest row finishes, then rotate through additional pages when the list exceeds the configured visible row count.
 - Video and YouTube are resizable canvas elements instead of forced full-screen modes.
 - Independent label and content typography per element, including color, font size and outline color/width, with cross-element Copy/Paste style; plus solid or transparent backgrounds, opacity, corner radius, media fit and up to 400% media zoom.
 - Canvas background color and optional background image.

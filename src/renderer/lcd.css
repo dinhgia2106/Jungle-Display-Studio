@@ -5,10 +5,22 @@ body { background: #071019; color: #effaf5; font-family: Inter, "Segoe UI", Aria
 .widget { position: absolute; overflow: hidden; }
 .widget-inner { width: 100%; height: 100%; padding: 8%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .widget-label { flex: 0 0 auto; margin-bottom: 5%; color: currentColor; font-size: .38em; font-weight: 800; letter-spacing: .08em; opacity: .75; }
-.widget.tasks .widget-label, .widget.uptime .widget-label { font-size: 1.52em; line-height: .9; }
+.widget.tasks .widget-label, .widget.calendar .widget-label, .widget.uptime .widget-label { font-size: 1.52em; line-height: .9; }
 .widget-value { min-width: 0; overflow: hidden; font-size: 1em; font-weight: 850; line-height: .95; white-space: nowrap; text-overflow: ellipsis; }
 .widget-value.multiline { line-height: 1.08; white-space: pre-wrap; }
 .widget video, .widget img, .widget iframe { display: block; width: 100%; height: 100%; border: 0; transform-origin: center center; will-change: transform; }
-.task-widget { justify-content: flex-start; padding: 5%; }
-.task-widget ol { width: 100%; min-height: 0; margin: 2% 0 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 2%; list-style: none; overflow: hidden; }
-.task-widget li { min-height: 0; padding: 2% 3%; overflow: hidden; border-radius: .2em; background: rgba(255,255,255,.07); font-size: .72em; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.task-widget, .calendar-widget { justify-content: flex-start; padding: 5%; }
+.task-widget ol, .calendar-widget ol { width: 100%; min-height: 0; margin: 2% 0 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 2%; list-style: none; overflow: hidden; }
+.task-widget li, .calendar-widget li { min-height: 0; padding: 2% 3%; overflow: hidden; border-radius: .2em; background: rgba(255,255,255,.07); font-size: .72em; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.task-widget li { display: flex; align-items: center; }
+.calendar-widget li { display: flex; align-items: center; gap: .6em; }
+.calendar-widget .calendar-when { flex: 0 0 auto; color: #62edab; font-size: .72em; font-weight: 850; text-transform: uppercase; }
+.task-widget .list-text-viewport, .calendar-widget .list-text-viewport { min-width: 0; overflow: hidden; }
+.task-widget .list-text-viewport { width: 100%; }
+.calendar-widget .list-text-viewport { flex: 1 1 auto; }
+.task-widget .list-text, .calendar-widget .list-text { display: block; width: 100%; min-width: 0; overflow: visible; white-space: nowrap; text-overflow: clip; }
+.list-text.is-overflowing { animation: horizontal-marquee var(--marquee-duration) linear forwards; will-change: transform; }
+.widget.list-advancing .task-widget ol, .widget.list-advancing .calendar-widget ol { animation: list-advance .38s ease-out both; }
+@keyframes list-advance { from { opacity: .15; transform: translateY(12%); } to { opacity: 1; transform: translateY(0); } }
+@keyframes horizontal-marquee { from { transform: translateX(0); } to { transform: translateX(var(--marquee-distance)); } }
+@media (prefers-reduced-motion: reduce) { .widget.list-advancing .task-widget ol, .widget.list-advancing .calendar-widget ol, .list-text.is-overflowing { animation: none; } .list-text.is-overflowing { transform: none; } }

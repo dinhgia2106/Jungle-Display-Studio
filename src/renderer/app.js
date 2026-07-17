@@ -1,12 +1,12 @@
 let settings, stats, deviceState;
-let scannedDevices = [], selectedElementId = null, selectedElementIds = new Set(), dragState = null, typographyClipboard = null, canvasScale = 1, saveTimer, toastTimer, saveRevision = 0;
+let scannedDevices = [], selectedElementId = null, selectedElementIds = new Set(), dragState = null, typographyClipboard = null, canvasScale = 1, saveTimer, toastTimer, saveRevision = 0, lastCalendarDate, editingEventId = null;
 const $ = (id) => document.getElementById(id);
 const esc = (value = "") => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
 const clamp = (value, min, max, fallback = min) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : fallback;
 
 const VI = window.JUNGLE_I18N.vi;
 const DYNAMIC = {
-  en:{select:"Select",selected:"Selected",connect:"Connect",disconnect:"Disconnect",online:"ONLINE",offline:"OFFLINE",disconnected:"Disconnected",connecting:"Connecting",streaming:"Streaming",error:"Connection error",remaining:"{count} remaining",done:"All tasks completed",source:"Choose a source",saved:"Saved",saving:"Saving.",scanned:"Display scan complete",reset:"Restored defaults",multiSelected:"{count} selected",styleCopied:"Style copied",stylePasted:"Style pasted"},
+  en:{select:"Select",selected:"Selected",connect:"Connect",disconnect:"Disconnect",online:"ONLINE",offline:"OFFLINE",disconnected:"Disconnected",connecting:"Connecting",streaming:"Streaming",error:"Connection error",remaining:"{count} remaining",done:"All tasks completed",source:"Choose a source",saved:"Saved",saving:"Saving.",scanned:"Display scan complete",reset:"Restored defaults",multiSelected:"{count} selected",styleCopied:"Style copied",stylePasted:"Style pasted",noEvents:"No events",eventCount:"{count} events",allDay:"All day",todayShort:"Today",tomorrow:"Tomorrow",repeatDaily:"Daily",repeatWeekly:"Weekly",repeatMonthly:"Monthly",repeatYearly:"Yearly",deleteSeries:"Delete event / repeating series",editEvent:"Edit",deleteEvent:"Delete",addReminder:"Add reminder",updateReminder:"Save changes",cancel:"Cancel",annualOn:"Every year on {date}",startsOn:"Starts {date}",repeatsUntil:"until {date}"},
   vi: window.JUNGLE_I18N.dynamicVi
 };
 function tr(key, values = {}) {
@@ -56,11 +56,26 @@ function metric(type) {
   if (type === "gpu") return stats.gpu?.percent == null ? "N/A" : stats.gpu.percent + "%";
   return uptime(stats.uptime);
 }
-function taskHtml(element) {
-  const tasks = settings.todos.filter((task) => !task.done).slice(0, element.maxItems || 4);
-  return tasks.length ? tasks.map((task) => "<li>" + esc(task.title) + "</li>").join("") : "<li>" + esc(tr("done")) + "</li>";
+function taskHtml(element, page = 0) {
+  const tasks = settings.todos.filter((task) => !task.done),visible=window.JUNGLE_CALENDAR.pageItems(tasks,element.maxItems||4,page).items;
+  return visible.length ? visible.map((task) => '<li><span class="list-text-viewport"><span class="list-text">' + esc(task.title) + "</span></span></li>").join("") : '<li><span class="list-text-viewport"><span class="list-text">' + esc(tr("done")) + "</span></span></li>";
 }
-function elementHtml(element) {
+function calendarOccurrences(days = 90, limit = 200) {
+  return window.JUNGLE_CALENDAR.listOccurrences(settings.events || [], new Date(), days, limit);
+}
+function eventRepeatLabel(event) {
+  return event.repeat && event.repeat !== "none" ? tr("repeat" + event.repeat[0].toUpperCase() + event.repeat.slice(1)) : "";
+}
+function occurrenceDay(occurrence, compact = false) {
+  if (occurrence.daysFromToday === 0) return tr("todayShort");
+  if (occurrence.daysFromToday === 1) return tr("tomorrow");
+  return new Intl.DateTimeFormat(settings.language === "vi" ? "vi-VN" : "en-GB", compact ? {day:"2-digit",month:"2-digit"} : {weekday:"short",day:"2-digit",month:"short"}).format(occurrence.date);
+}
+function calendarHtml(element, page = 0) {
+  const occurrences=calendarOccurrences(90,200),items=window.JUNGLE_CALENDAR.pageItems(occurrences,element.maxItems||4,page).items;
+  return items.length ? items.map((occurrence)=>'<li><span class="calendar-when">'+esc(occurrenceDay(occurrence,true))+(occurrence.event.time?" · "+esc(occurrence.event.time):"")+'</span><span class="list-text-viewport"><span class="list-text">'+esc(occurrence.event.title)+'</span></span></li>').join("") : '<li><span class="list-text-viewport"><span class="list-text">'+esc(tr("noEvents"))+"</span></span></li>";
+}
+function elementHtml(element, page = 0) {
   const label = element.title ? '<span class="element-label">' + esc(element.title) + "</span>" : "";
   if (element.type === "video") return element.source ? '<video src="' + esc(mediaUrl(element.source)) + '" autoplay loop muted playsinline style="object-fit:' + element.fit + '"></video>' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
   if (element.type === "youtube") {
@@ -69,7 +84,8 @@ function elementHtml(element) {
   }
   if (element.type === "image") return element.source ? '<img src="' + esc(mediaUrl(element.source)) + '" style="object-fit:' + element.fit + '">' : '<div class="element-content">' + label + '<b class="element-value">' + tr("source") + "</b></div>";
   if (element.type === "shape") return '<div class="element-content"></div>';
-  if (element.type === "tasks") return '<div class="element-content element-tasks">' + label + "<ol>" + taskHtml(element) + "</ol></div>";
+  if (element.type === "tasks") return '<div class="element-content element-tasks">' + label + "<ol>" + taskHtml(element,page) + "</ol></div>";
+  if (element.type === "calendar") return '<div class="element-content element-calendar">' + label + "<ol>" + calendarHtml(element,page) + "</ol></div>";
   if (element.type === "text") return '<div class="element-content">' + label + '<b class="element-value element-date">' + esc(element.text) + "</b></div>";
   if (element.type === "clock") return '<div class="element-content">' + label + '<b class="element-value" data-dynamic="clock">' + nowInfo().time + "</b></div>";
   if (element.type === "date") return '<div class="element-content">' + label + '<b class="element-value element-date" data-dynamic="date">' + esc(nowInfo().date) + "</b></div>";
@@ -102,10 +118,10 @@ function scaleCanvas() {
   wrap.style.width = Math.round(display.profile.width * canvasScale) + "px"; wrap.style.height = Math.round(display.profile.height * canvasScale) + "px";
 }
 function contentSignature(element) {
-  const signature=[element.type,element.title,element.text,element.source,element.maxItems];if(element.type==="tasks")signature.push(settings.todos);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
+  const signature=[element.type,element.title,element.text,element.source,element.maxItems];if(element.type==="tasks")signature.push(settings.todos);if(element.type==="calendar")signature.push(settings.events,window.JUNGLE_CALENDAR.dateKey(new Date()),settings.language);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
 }
 function resolvedLabelStyle(element) {
-  const scale = ["tasks","uptime"].includes(element.type) ? 1.52 : .38;
+  const scale = ["tasks","calendar","uptime"].includes(element.type) ? 1.52 : .38;
   return {
     color: element.labelColor || element.color,
     fontSize: Number.isFinite(Number(element.labelFontSize)) ? Number(element.labelFontSize) : element.fontSize * scale,
@@ -145,17 +161,32 @@ function styleElementLabel(node, element) {
 }
 function styleElement(node, element, refreshContent = true) {
   Object.assign(node.style,{left:element.x+"px",top:element.y+"px",width:element.width+"px",height:element.height+"px",zIndex:element.z,color:element.color,backgroundColor:element.background,fontSize:element.fontSize+"px",WebkitTextStrokeColor:element.textStrokeColor||"#000000",WebkitTextStrokeWidth:(element.textStrokeWidth||0)+"px",paintOrder:"stroke fill",opacity:element.opacity,borderRadius:element.radius+"px"});
-  if (refreshContent) { node.innerHTML = elementHtml(element) + '<i class="resize-handle"></i>';node.dataset.contentSignature=contentSignature(element); }
+  if (refreshContent) { node.innerHTML = elementHtml(element,Number(node.dataset.listPage)||0) + '<i class="resize-handle"></i>';node.dataset.contentSignature=contentSignature(element); }
   styleElementLabel(node,element);
   const media = node.querySelector("video,img,iframe");if(media){media.style.objectFit=element.fit;media.style.transform="scale("+(element.mediaScale||1)+")";}
   if(element.type==="youtube")window.JUNGLE_YOUTUBE.watch(node);
   if (refreshContent) node.querySelector("video")?.play().catch(()=>{});
+  if(["tasks","calendar"].includes(element.type))scheduleWidgetListMotion(node,element);
 }
 function createElementNode(element) {
   const node=document.createElement("div");node.className="canvas-element "+element.type+(selectedElementIds.has(element.id)?" selected":"");node.dataset.elementId=element.id;node.dataset.type=element.type;styleElement(node,element);return node;
 }
 function updateElementNode(element, refreshContent = false) {
   const node=$("layout-canvas").querySelector('[data-element-id="'+CSS.escape(element.id)+'"]');if(node)styleElement(node,element,refreshContent);return node;
+}
+function rotatingItemCount(element) {
+  if(element.type==="tasks")return settings.todos.filter((task)=>!task.done).length;
+  if(element.type==="calendar")return calendarOccurrences(90,200).length;
+  return 0;
+}
+function scheduleWidgetListMotion(node,element) {
+  const version=String((Number(node.dataset.motionVersion)||0)+1);node.dataset.motionVersion=version;requestAnimationFrame(()=>{if(node.isConnected&&node.dataset.motionVersion===version)prepareWidgetListMotion(node,element);});
+}
+function prepareWidgetListMotion(node,element) {
+  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,longest=[...node.querySelectorAll(".list-text")].reduce((maximum,target)=>{target.classList.remove("is-overflowing");target.style.removeProperty("--marquee-distance");target.style.removeProperty("--marquee-duration");if(reduced)return maximum;const distance=Math.max(0,target.scrollWidth-target.clientWidth);if(distance<2)return maximum;const duration=window.JUNGLE_CALENDAR.marqueeDuration(distance);target.style.setProperty("--marquee-distance",-distance+"px");target.style.setProperty("--marquee-duration",duration+"ms");void target.offsetWidth;target.classList.add("is-overflowing");return Math.max(maximum,duration);},0),pageCount=Math.max(1,Math.ceil(rotatingItemCount(element)/(element.maxItems||4)));node.dataset.nextListAt=pageCount>1||longest>0?String(Date.now()+longest+3500):"0";
+}
+function advanceWidgetLists() {
+  const now=Date.now();document.querySelectorAll("#layout-canvas .canvas-element.tasks, #layout-canvas .canvas-element.calendar").forEach((node)=>{const due=Number(node.dataset.nextListAt)||0;if(!due||now<due)return;const element=activeDisplay().canvas.elements.find((item)=>item.id===node.dataset.elementId);if(!element)return;const pageCount=Math.max(1,Math.ceil(rotatingItemCount(element)/(element.maxItems||4))),current=(Number(node.dataset.listPage)||0)%pageCount,next=pageCount>1?(current+1)%pageCount:current;node.dataset.listPage=next;styleElement(node,element,true);if(next!==current){node.classList.remove("list-advancing");void node.offsetWidth;node.classList.add("list-advancing");setTimeout(()=>node.classList.remove("list-advancing"),450);}});
 }
 function refreshCanvasSelection() {
   document.querySelectorAll(".canvas-element").forEach((node)=>node.classList.toggle("selected",selectedElementIds.has(node.dataset.elementId)));renderInspector();
@@ -191,7 +222,7 @@ function renderInspector() {
   $("prop-selection-count").textContent = selectedElementIds.size > 1 ? tr("multiSelected",{count:selectedElementIds.size}) : element.id;
   $("prop-opacity-value").textContent = Math.round(element.opacity*100) + "%";$("prop-media-scale-value").textContent=Math.round((element.mediaScale||1)*100)+"%";
 
-  const textTypes = ["text","clock","date","cpu","ram","gpu","uptime","tasks"];
+  const textTypes = ["text","clock","date","cpu","ram","gpu","uptime","tasks","calendar"];
   const mediaTypes = ["video","youtube","image"];
   $("prop-title-row").hidden = !textTypes.includes(element.type);
   $("prop-text-row").hidden = element.type !== "text";
@@ -201,7 +232,7 @@ function renderInspector() {
   $("prop-content-style").hidden = !isText;
   $("prop-label-style").hidden = !isText;
   $("prop-fit-row").hidden = !["video","image"].includes(element.type);$("prop-media-tools").hidden=!mediaTypes.includes(element.type);
-  $("prop-items-row").hidden = element.type !== "tasks";
+  $("prop-items-row").hidden = !["tasks","calendar"].includes(element.type);
   document.querySelectorAll('[data-arrange^="space-"]').forEach((button)=>button.disabled=selectedElementIds.size<3);
 }
 function renderDisplayForm() {
@@ -216,18 +247,60 @@ function renderTasks() {
   $("task-count").textContent = tr("remaining",{count:settings.todos.filter((task)=>!task.done).length});
   $("task-list").innerHTML = settings.todos.length ? settings.todos.map((task)=>'<div class="task'+(task.done?" done":"")+'"><input type="checkbox" data-task-toggle="'+esc(task.id)+'"'+(task.done?" checked":"")+"><span>"+esc(task.title)+'</span><button data-task-delete="'+esc(task.id)+'">x</button></div>').join("") : '<div class="empty-state">'+tr("done")+"</div>";
 }
+function eventCard(occurrence) {
+  const event=occurrence.event,repeat=eventRepeatLabel(event),meta=[event.time||tr("allDay"),repeat].filter(Boolean).join(" · ");
+  return '<article class="calendar-event"><time datetime="'+esc(occurrence.key)+'"><b>'+esc(occurrenceDay(occurrence))+'</b><span>'+esc(meta)+'</span></time><div><strong>'+esc(event.title)+'</strong><small>'+esc(occurrence.key)+'</small></div><button type="button" data-event-delete="'+esc(event.id)+'" title="'+esc(tr("deleteSeries"))+'">×</button></article>';
+}
+function storedEventDate(event, annual = false) {
+  const source=annual?window.JUNGLE_CALENDAR.parseDateKey("2000-"+event.monthDay):window.JUNGLE_CALENDAR.parseDateKey(event.date);
+  if(!source)return "";
+  return new Intl.DateTimeFormat(settings.language==="vi"?"vi-VN":"en-GB",annual?{day:"2-digit",month:"long"}:{weekday:"short",day:"2-digit",month:"short",year:"numeric"}).format(source);
+}
+function masterEventCard(event) {
+  const annual=event.repeat==="yearly",dateText=annual?tr("annualOn",{date:storedEventDate(event,true)}):tr("startsOn",{date:storedEventDate(event)}),repeat=eventRepeatLabel(event),until=event.repeatUntil?tr("repeatsUntil",{date:storedEventDate({date:event.repeatUntil})}):"",meta=[event.time||tr("allDay"),annual?dateText:[dateText,repeat].filter(Boolean).join(" · "),until].filter(Boolean).join(" · ");
+  return '<article class="calendar-master"><div><strong>'+esc(event.title)+'</strong><small>'+esc(meta)+'</small></div><div class="calendar-master-actions"><button class="ghost" type="button" data-event-edit="'+esc(event.id)+'">'+esc(tr("editEvent"))+'</button><button class="danger-soft" type="button" data-event-delete="'+esc(event.id)+'">'+esc(tr("deleteEvent"))+'</button></div></article>';
+}
+function syncEventDateFields() {
+  const annual=$("event-repeat").value==="yearly",repeating=$("event-repeat").value!=="none";
+  $("event-date-row").hidden=annual;$("event-yearly-date-row").hidden=!annual;$("event-date").required=!annual;$("event-repeat-until-row").hidden=!repeating;
+  if(!repeating)$("event-repeat-until").value="";
+}
+function syncAnnualDayLimit() {
+  const month=Number($("event-yearly-month").value),max=new Date(2000,month,0).getDate();$("event-yearly-day").max=max;$("event-yearly-day").value=Math.min(max,Math.max(1,Number($("event-yearly-day").value)||1));
+}
+function renderEventFormState() {
+  $("calendar-submit").textContent=tr(editingEventId?"updateReminder":"addReminder");$("cancel-event-edit").textContent=tr("cancel");$("cancel-event-edit").hidden=!editingEventId;
+}
+function resetEventForm() {
+  editingEventId=null;$("event-title").value="";$("event-time").value="";$("event-repeat").value="none";$("event-repeat-until").value="";$("event-date").value=window.JUNGLE_CALENDAR.dateKey(new Date());const today=new Date();$("event-yearly-day").value=today.getDate();$("event-yearly-month").value=String(today.getMonth()+1).padStart(2,"0");syncAnnualDayLimit();syncEventDateFields();renderEventFormState();
+}
+function startEventEdit(id) {
+  const event=settings.events.find((item)=>item.id===id);if(!event)return;editingEventId=id;$("event-title").value=event.title;$("event-date").value=event.date||window.JUNGLE_CALENDAR.dateKey(new Date());$("event-time").value=event.time||"";$("event-repeat").value=event.repeat;$("event-repeat-until").value=event.repeatUntil||"";const annual=event.monthDay||String(event.date||"").slice(5),parts=annual.split("-");if(parts.length===2){$("event-yearly-month").value=parts[0];$("event-yearly-day").value=Number(parts[1]);}syncAnnualDayLimit();syncEventDateFields();renderEventFormState();$("event-title").focus();
+}
+function renderCalendar() {
+  const occurrences=calendarOccurrences(90,200),today=occurrences.filter((item)=>item.daysFromToday===0),upcoming=occurrences.filter((item)=>item.daysFromToday>0).slice(0,30);
+  $("calendar-count").textContent=tr("eventCount",{count:(settings.events||[]).length});
+  $("calendar-today-date").textContent=new Intl.DateTimeFormat(settings.language==="vi"?"vi-VN":"en-GB",{weekday:"long",day:"2-digit",month:"long"}).format(new Date());
+  $("calendar-today-count").textContent=today.length;
+  $("calendar-today-list").innerHTML=today.length?today.map(eventCard).join(""):'<div class="empty-state">'+esc(tr("noEvents"))+"</div>";
+  $("calendar-upcoming-list").innerHTML=upcoming.length?upcoming.map(eventCard).join(""):'<div class="empty-state">'+esc(tr("noEvents"))+"</div>";
+  $("calendar-all-list").innerHTML=(settings.events||[]).length?settings.events.slice().sort((a,b)=>a.title.localeCompare(b.title)).map(masterEventCard).join(""):'<div class="empty-state">'+esc(tr("noEvents"))+"</div>";
+  if(!$("event-date").value)$("event-date").value=window.JUNGLE_CALENDAR.dateKey(new Date());
+  renderEventFormState();
+}
 function renderSettings() {
   $("launch-at-login").checked=settings.startup.launchAtLogin; $("start-hidden").checked=settings.startup.startHidden; $("start-hidden").disabled=!settings.startup.launchAtLogin; $("auto-connect").checked=settings.startup.autoConnect; $("auto-reconnect").checked=settings.startup.autoReconnect;
   $("reconnect-delay").value=settings.startup.reconnectDelay; $("open-preview").checked=settings.startup.openPreview;
 }
 function updateDynamic() {
   const now=nowInfo(); $("clock").textContent=new Date().toLocaleTimeString(settings.language==="vi"?"vi-VN":"en-GB");
+  const calendarDate=window.JUNGLE_CALENDAR.dateKey(new Date());if(lastCalendarDate&&lastCalendarDate!==calendarDate){renderCanvas();renderCalendar();}lastCalendarDate=calendarDate;
   if(stats){$("cpu-stat").textContent=stats.cpuPercent+"%";$("cpu-name").textContent=stats.cpu;$("ram-stat").textContent=stats.memoryPercent+"%";$("ram-detail").textContent=stats.memoryUsedGb+" / "+stats.memoryTotalGb+" GB";$("gpu-stat").textContent=stats.gpu?.percent==null?"N/A":stats.gpu.percent+"%";$("gpu-name").textContent=stats.gpu?.name||"GPU unavailable";}
   document.querySelectorAll("[data-dynamic]").forEach((node)=>node.textContent=node.dataset.dynamic==="clock"?now.time:node.dataset.dynamic==="date"?now.date:metric(node.dataset.dynamic));
   const status=["connecting","streaming","error"].includes(deviceState?.status)?deviceState.status:"disconnected", side=document.querySelector(".sidebar-foot");
   side.className="sidebar-foot "+status;$("sidebar-status").textContent=tr(status)+(deviceState?.portPath?" · "+deviceState.portPath:"");$("stream-stat").textContent=(deviceState?.fps||0)+" FPS";$("frame-detail").textContent=deviceState?.frameBytes?Math.round(deviceState.frameBytes/1000)+" KB/frame":"--";
 }
-function renderAll(){ $("language").value=settings.language;applyLanguage();renderOptions();renderDevices();renderCanvas();renderDisplayForm();renderTasks();renderSettings();updateDynamic(); }
+function renderAll(){ $("language").value=settings.language;applyLanguage();renderOptions();renderDevices();renderCanvas();renderDisplayForm();renderTasks();renderCalendar();renderSettings();updateDynamic(); }
 async function saveRefresh(message){clearTimeout(saveTimer);const revision=++saveRevision,saved=await window.jungle.saveSettings(structuredClone(settings));if(revision!==saveRevision)return;settings=saved;renderAll();if(message)toast(message);}
 function queueSave(){ $("save-indicator").textContent=tr("saving");clearTimeout(saveTimer);const revision=++saveRevision,snapshot=structuredClone(settings);saveTimer=setTimeout(async()=>{const saved=await window.jungle.saveSettings(snapshot);if(revision!==saveRevision)return;settings=saved;$("save-indicator").textContent=tr("saved");},450); }
 async function scan(){
@@ -242,9 +315,9 @@ async function scan(){
   if(scannedDevices.length)settings=await window.jungle.saveSettings(settings);renderAll();toast(tr("scanned"));
 }
 function newElement(type){
-  const display=activeDisplay(),p=display.profile,large=["video","youtube","image","tasks"].includes(type),w=Math.min(p.width,large?Math.max(240,Math.round(p.width*.46)):Math.max(150,Math.round(p.width*.23)));
-  const h=Math.min(p.height,["video","youtube","image"].includes(type)?Math.max(140,Math.round(p.height*.42)):type==="tasks"?Math.max(160,Math.round(p.height*.55)):Math.max(80,Math.round(p.height*.23)));
-  const labels={cpu:"CPU",ram:"RAM",gpu:"GPU",uptime:"UPTIME",tasks:"TASKS",clock:"TIME",date:"DATE"},fontSize=type==="clock"?52:28,labelScale=["tasks","uptime"].includes(type)?1.52:.38;
+  const display=activeDisplay(),p=display.profile,large=["video","youtube","image","tasks","calendar"].includes(type),w=Math.min(p.width,large?Math.max(240,Math.round(p.width*.46)):Math.max(150,Math.round(p.width*.23)));
+  const h=Math.min(p.height,["video","youtube","image"].includes(type)?Math.max(140,Math.round(p.height*.42)):["tasks","calendar"].includes(type)?Math.max(160,Math.round(p.height*.55)):Math.max(80,Math.round(p.height*.23)));
+  const labels={cpu:"CPU",ram:"RAM",gpu:"GPU",uptime:"UPTIME",tasks:"TASKS",calendar:"CALENDAR",clock:"TIME",date:"DATE"},fontSize=type==="clock"?52:28,labelScale=["tasks","calendar","uptime"].includes(type)?1.52:.38;
   return{id:type+"-"+Date.now().toString(36),type,x:Math.max(0,Math.round((p.width-w)/2)),y:Math.max(0,Math.round((p.height-h)/2)),width:w,height:h,color:"#effaf5",background:type==="shape"?"#62edab":"#102832",fontSize,textStrokeColor:"#000000",textStrokeWidth:0,labelColor:"#effaf5",labelFontSize:Math.round(fontSize*labelScale*10)/10,labelStrokeColor:"#000000",labelStrokeWidth:0,opacity:1,radius:12,fit:"cover",mediaScale:1,z:Math.max(0,...display.canvas.elements.map((item)=>item.z))+1,title:labels[type]||"",text:type==="text"?"Your text":"",source:"",maxItems:4};
 }
 function arrangeSelection(mode){
@@ -338,12 +411,18 @@ function bind(){
   $("task-form").onsubmit=async(e)=>{e.preventDefault();const input=$("task-input"),title=input.value.trim();if(!title)return;settings.todos.push({id:"task-"+Date.now().toString(36),title,done:false});input.value="";await saveRefresh(tr("saved"));};
   $("task-list").onchange=async(e)=>{const task=settings.todos.find((item)=>item.id===e.target.dataset.taskToggle);if(task){task.done=e.target.checked;await saveRefresh(tr("saved"));}};
   $("task-list").onclick=async(e)=>{if(e.target.dataset.taskDelete){settings.todos=settings.todos.filter((task)=>task.id!==e.target.dataset.taskDelete);await saveRefresh(tr("saved"));}};
+  $("event-repeat").onchange=syncEventDateFields;$("event-yearly-month").onchange=syncAnnualDayLimit;$("event-yearly-day").oninput=syncAnnualDayLimit;$("cancel-event-edit").onclick=resetEventForm;
+  $("calendar-form").onsubmit=async(e)=>{e.preventDefault();const title=$("event-title").value.trim(),repeat=$("event-repeat").value,annual=repeat==="yearly",monthDay=annual?$("event-yearly-month").value+"-"+String($("event-yearly-day").value).padStart(2,"0"):"",date=annual?"":$("event-date").value;if(!title||(!annual&&!date)||annual&&!window.JUNGLE_CALENDAR.validMonthDay(monthDay))return;const event={id:editingEventId||"event-"+Date.now().toString(36),title,date,monthDay,time:$("event-time").value,repeat,repeatUntil:$("event-repeat-until").value},index=settings.events.findIndex((item)=>item.id===editingEventId);if(index>=0)settings.events[index]=event;else settings.events.push(event);resetEventForm();await saveRefresh(tr("saved"));};
+  const calendarListClick=async(e)=>{const editId=e.target.dataset.eventEdit,deleteId=e.target.dataset.eventDelete;if(editId)return startEventEdit(editId);if(!deleteId)return;settings.events=settings.events.filter((event)=>event.id!==deleteId);if(editingEventId===deleteId)resetEventForm();await saveRefresh(tr("saved"));};
+  ["calendar-today-list","calendar-upcoming-list","calendar-all-list"].forEach((id)=>$(id).onclick=calendarListClick);
   $("launch-at-login").onchange=()=>{$("start-hidden").disabled=!$("launch-at-login").checked;};
   $("save-settings").onclick=async()=>{settings.startup={launchAtLogin:$("launch-at-login").checked,startHidden:$("start-hidden").checked,autoConnect:$("auto-connect").checked,autoReconnect:$("auto-reconnect").checked,reconnectDelay:Number($("reconnect-delay").value),openPreview:$("open-preview").checked};await saveRefresh(tr("saved"));};
+  resetEventForm();
 }
 async function start(){
   [settings,stats,deviceState]=await Promise.all([window.jungle.getSettings(),window.jungle.getSystem(),window.jungle.getDeviceState()]);bind();renderAll();await scan().catch(()=>renderAll());
   setInterval(async()=>{stats=await window.jungle.getSystem();updateDynamic();},1000);
+  setInterval(advanceWidgetLists,200);
   window.jungle.onDevice((next)=>{deviceState=next;renderDevices();updateDynamic();});
   window.jungle.onSettings((next)=>{settings=next;if(!dragState)renderAll();});
 }

@@ -13,6 +13,7 @@
       <button class="nav active" data-panel="overview" data-i18n="nav.overview">Overview</button>
       <button class="nav" data-panel="canvas" data-i18n="nav.canvas">Canvas</button>
       <button class="nav" data-panel="tasks" data-i18n="nav.tasks">Tasks</button>
+      <button class="nav" data-panel="calendar" data-i18n="nav.calendar">Calendar</button>
       <button class="nav" data-panel="display" data-i18n="nav.display">Display</button>
       <button class="nav" data-panel="settings" data-i18n="nav.settings">Settings</button>
     </nav>
@@ -64,6 +65,7 @@
             <button data-add="gpu"><b>GPU</b><span>GPU</span></button>
             <button data-add="uptime"><b>UP</b><span>Uptime</span></button>
             <button data-add="tasks"><b>✓</b><span data-i18n="element.tasks">Tasks</span></button>
+            <button data-add="calendar"><b>CAL</b><span data-i18n="element.calendar">Calendar</span></button>
             <button data-add="video"><b>▶</b><span data-i18n="element.video">Video</span></button>
             <button data-add="youtube"><b>YT</b><span>YouTube</span></button>
             <button data-add="image"><b>▧</b><span data-i18n="element.image">Image</span></button>
@@ -142,7 +144,7 @@
               <button id="media-fill-canvas" class="ghost wide" data-i18n="action.fillCanvas">Fill canvas (crop)</button>
               <small data-i18n="property.mediaZoomHelp">Fill the canvas first, then increase zoom until built-in black bars disappear.</small>
             </div>
-            <label id="prop-items-row"><span data-i18n="property.items">Task rows</span><input id="prop-max-items" type="number" min="1" max="20" /></label>
+            <label id="prop-items-row"><span data-i18n="property.items">Visible rows</span><input id="prop-max-items" type="number" min="1" max="20" /></label>
             <div class="layer-actions">
               <button class="ghost" id="send-back" data-i18n="action.sendBack">Back</button>
               <button class="ghost" id="bring-front" data-i18n="action.bringFront">Front</button>
@@ -158,6 +160,30 @@
       <div class="section-heading"><div><p class="eyebrow">TODO LIST</p><h2 data-i18n="tasks.title">Shared tasks</h2><p data-i18n="tasks.help">Task elements can show this list on any display.</p></div><p id="task-count"></p></div>
       <form id="task-form" class="task-form"><input id="task-input" maxlength="100" data-i18n-placeholder="tasks.placeholder" placeholder="Add a task…" autocomplete="off" /><button class="primary" data-i18n="action.addTask">Add task</button></form>
       <div id="task-list" class="task-list"></div>
+    </section>
+
+    <section class="panel" id="calendar">
+      <div class="section-heading">
+        <div><p class="eyebrow" data-i18n="calendar.eyebrow">REMINDERS</p><h2 data-i18n="calendar.title">Calendar reminders</h2><p data-i18n="calendar.help">See what is happening today and what is coming next. Repeating events appear automatically.</p></div>
+        <p id="calendar-count"></p>
+      </div>
+      <form id="calendar-form" class="calendar-form form-card">
+        <label class="calendar-title-field"><span data-i18n="calendar.eventTitle">Event</span><input id="event-title" maxlength="120" required data-i18n-placeholder="calendar.placeholder" placeholder="Add an event…" autocomplete="off" /></label>
+        <label id="event-date-row"><span data-i18n="calendar.date">Start date</span><input id="event-date" type="date" required /></label>
+        <label id="event-yearly-date-row" hidden><span data-i18n="calendar.annualDate">Day and month</span><span class="date-part-grid"><input id="event-yearly-day" type="number" min="1" max="31" value="1" aria-label="Day" /><select id="event-yearly-month" aria-label="Month"><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></span></label>
+        <label><span data-i18n="calendar.time">Time (optional)</span><input id="event-time" type="time" /></label>
+        <label><span data-i18n="calendar.repeat">Repeat</span><select id="event-repeat"><option value="none" data-i18n="calendar.repeatNone">Does not repeat</option><option value="daily" data-i18n="calendar.repeatDaily">Every day</option><option value="weekly" data-i18n="calendar.repeatWeekly">Every week</option><option value="monthly" data-i18n="calendar.repeatMonthly">Every month</option><option value="yearly" data-i18n="calendar.repeatYearly">Every year</option></select></label>
+        <label id="event-repeat-until-row" hidden><span data-i18n="calendar.repeatUntil">Repeat until (optional)</span><input id="event-repeat-until" type="date" /></label>
+        <div class="calendar-form-actions"><button id="calendar-submit" class="primary" type="submit">Add reminder</button><button id="cancel-event-edit" class="ghost" type="button" hidden>Cancel</button></div>
+      </form>
+      <div class="calendar-columns">
+        <section class="calendar-group today"><header><div><p class="eyebrow" data-i18n="calendar.today">TODAY</p><h3 id="calendar-today-date"></h3></div><span id="calendar-today-count"></span></header><div id="calendar-today-list" class="event-list"></div></section>
+        <section class="calendar-group"><header><div><p class="eyebrow" data-i18n="calendar.upcoming">UPCOMING</p><h3 data-i18n="calendar.next90Days">Next 90 days</h3></div></header><div id="calendar-upcoming-list" class="event-list"></div></section>
+      </div>
+      <section class="calendar-all">
+        <header><div><p class="eyebrow" data-i18n="calendar.all">ALL EVENTS</p><h3 data-i18n="calendar.manage">Manage events</h3><p data-i18n="calendar.manageHelp">Edit event details or delete an entire repeating series.</p></div></header>
+        <div id="calendar-all-list" class="calendar-master-list"></div>
+      </section>
     </section>
 
     <section class="panel" id="display">
@@ -209,6 +235,8 @@
 
   <div id="toast" class="toast"></div>
   <script src="i18n.js"></script>
+  <script src="calendar-i18n.js"></script>
+  <script src="calendar.js"></script>
   <script src="youtube.js"></script>
   <script src="app.js"></script>
 </body>

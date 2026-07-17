@@ -2,7 +2,7 @@ const { DEFAULT_PROFILE, clamp, sanitizeProfile } = require('./display-profile')
 
 const ELEMENT_TYPES = new Set([
   'text', 'clock', 'date', 'cpu', 'ram', 'gpu', 'uptime',
-  'tasks', 'video', 'youtube', 'image', 'shape'
+  'tasks', 'calendar', 'video', 'youtube', 'image', 'shape'
 ]);
 
 function color(value, fallback) {
@@ -24,6 +24,39 @@ function number(value, min, max, fallback) {
 function safeId(value, fallback) {
   const id = String(value || '').replace(/[^a-z0-9_.:-]/gi, '-').slice(0, 120);
   return id || fallback;
+}
+
+function isoDate(value) {
+  const text = String(value || '');
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3]) ? text : '';
+}
+
+function monthDay(value) {
+  const text = String(value || '');
+  const match = text.match(/^(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const date = new Date(2000, Number(match[1]) - 1, Number(match[2]));
+  return date.getMonth() === Number(match[1]) - 1 && date.getDate() === Number(match[2]) ? text : '';
+}
+
+function sanitizeCalendarEvent(value, index) {
+  const repeat = ['daily', 'weekly', 'monthly', 'yearly'].includes(value?.repeat) ? value.repeat : 'none';
+  const sourceDate = isoDate(value?.date);
+  const annualDate = monthDay(value?.monthDay || (repeat === 'yearly' ? sourceDate.slice(5) : ''));
+  const date = repeat === 'yearly' && annualDate ? '' : sourceDate;
+  const repeatUntil = isoDate(value?.repeatUntil);
+  return {
+    id: safeId(value?.id, 'event-' + index),
+    title: String(value?.title || '').slice(0, 120),
+    date,
+    monthDay: annualDate,
+    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value?.time || '')) ? String(value.time) : '',
+    repeat,
+    repeatUntil: repeat !== 'none' && (repeat === 'yearly' || repeatUntil >= date) ? repeatUntil : ''
+  };
 }
 
 function defaultElements(profile = DEFAULT_PROFILE) {
@@ -58,14 +91,14 @@ function defaultCanvas(profile = DEFAULT_PROFILE) {
 }
 
 function elementDefaults(type, index) {
-  const labels = { cpu: 'CPU', ram: 'RAM', gpu: 'GPU', uptime: 'UPTIME', tasks: 'TASKS', clock: 'TIME', date: 'DATE' };
+  const labels = { cpu: 'CPU', ram: 'RAM', gpu: 'GPU', uptime: 'UPTIME', tasks: 'TASKS', calendar: 'CALENDAR', clock: 'TIME', date: 'DATE' };
   return {
     id: 'element-' + index,
     type,
     x: 20,
     y: 20,
-    width: ['video', 'youtube', 'image', 'tasks'].includes(type) ? 360 : 220,
-    height: ['video', 'youtube', 'image'].includes(type) ? 200 : type === 'tasks' ? 220 : 110,
+    width: ['video', 'youtube', 'image', 'tasks', 'calendar'].includes(type) ? 360 : 220,
+    height: ['video', 'youtube', 'image'].includes(type) ? 200 : ['tasks', 'calendar'].includes(type) ? 220 : 110,
     color: '#effaf5',
     background: type === 'shape' ? '#62edab' : '#102832',
     fontSize: type === 'clock' ? 52 : 28,
@@ -93,7 +126,7 @@ function sanitizeElement(value, profile, index) {
   const textColor = color(base.color, '#effaf5');
   const textStrokeColor = color(base.textStrokeColor, '#000000');
   const textStrokeWidth = Math.round(number(base.textStrokeWidth, 0, 30, 0) * 10) / 10;
-  const legacyLabelScale = ['tasks', 'uptime'].includes(type) ? 1.52 : 0.38;
+  const legacyLabelScale = ['tasks', 'calendar', 'uptime'].includes(type) ? 1.52 : 0.38;
   return {
     id: safeId(base.id, 'element-' + index),
     type,
@@ -216,7 +249,7 @@ function normalizeWorkspace(saved = {}) {
   const requestedActive = safeId(input.activeDisplayId, displays[0].id);
   const activeDisplayId = displays.some((display) => display.id === requestedActive) ? requestedActive : displays[0].id;
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     language: input.language === 'vi' ? 'vi' : 'en',
     startup: {
       launchAtLogin: Boolean(input.startup?.launchAtLogin),
@@ -232,7 +265,8 @@ function normalizeWorkspace(saved = {}) {
       id: safeId(todo?.id, 'task-' + index),
       title: String(todo?.title || '').slice(0, 100),
       done: Boolean(todo?.done)
-    })).filter((todo) => todo.title) : []
+    })).filter((todo) => todo.title) : [],
+    events: Array.isArray(input.events) ? input.events.slice(0, 200).map(sanitizeCalendarEvent).filter((event) => event.title && (event.date || event.monthDay)) : []
   };
 }
 
@@ -248,6 +282,7 @@ module.exports = {
   sanitizeElement,
   sanitizeCanvas,
   sanitizeDisplay,
+  sanitizeCalendarEvent,
   normalizeWorkspace,
   activeDisplay
 };

@@ -113,12 +113,23 @@ label output { float: right; color: var(--mint); }
 .canvas-element .resize-handle { position: absolute; right: 0; bottom: 0; width: 17px; height: 17px; border-radius: 9px 0 0 0; background: var(--mint); cursor: nwse-resize; z-index: 10; }
 .element-content { width: 100%; height: 100%; padding: 8%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .element-label { flex: 0 0 auto; margin-bottom: 5%; color: currentColor; font-size: .38em; font-weight: 800; letter-spacing: .08em; opacity: .75; }
-.canvas-element.tasks .element-label, .canvas-element.uptime .element-label { font-size: 1.52em; line-height: .9; }
+.canvas-element.tasks .element-label, .canvas-element.calendar .element-label, .canvas-element.uptime .element-label { font-size: 1.52em; line-height: .9; }
 .element-value { min-width: 0; overflow: hidden; font-size: 1em; font-weight: 850; line-height: .95; white-space: nowrap; text-overflow: ellipsis; }
 .element-date { line-height: 1.08; white-space: pre-wrap; }
-.element-tasks { justify-content: flex-start; padding: 5%; }
-.element-tasks ol { width: 100%; min-height: 0; margin: 2% 0 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 2%; list-style: none; overflow: hidden; }
-.element-tasks li { min-height: 0; padding: 2% 3%; overflow: hidden; border-radius: .2em; background: rgba(255,255,255,.07); font-size: .72em; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.element-tasks, .element-calendar { justify-content: flex-start; padding: 5%; }
+.element-tasks ol, .element-calendar ol { width: 100%; min-height: 0; margin: 2% 0 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 2%; list-style: none; overflow: hidden; }
+.element-tasks li, .element-calendar li { min-height: 0; padding: 2% 3%; overflow: hidden; border-radius: .2em; background: rgba(255,255,255,.07); font-size: .72em; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.element-tasks li { display: flex; align-items: center; }
+.element-calendar li { display: flex; align-items: center; gap: .6em; }
+.element-calendar .calendar-when { flex: 0 0 auto; color: #62edab; font-size: .72em; font-weight: 850; text-transform: uppercase; }
+.element-tasks .list-text-viewport, .element-calendar .list-text-viewport { min-width: 0; overflow: hidden; }
+.element-tasks .list-text-viewport { width: 100%; }
+.element-calendar .list-text-viewport { flex: 1 1 auto; }
+.element-tasks .list-text, .element-calendar .list-text { display: block; width: 100%; min-width: 0; overflow: visible; white-space: nowrap; text-overflow: clip; }
+.list-text.is-overflowing { animation: horizontal-marquee var(--marquee-duration) linear forwards; will-change: transform; }
+.canvas-element.list-advancing .element-tasks ol, .canvas-element.list-advancing .element-calendar ol { animation: list-advance .38s ease-out both; }
+@keyframes list-advance { from { opacity: .15; transform: translateY(12%); } to { opacity: 1; transform: translateY(0); } }
+@keyframes horizontal-marquee { from { transform: translateX(0); } to { transform: translateX(var(--marquee-distance)); } }
 .canvas-element video, .canvas-element img, .canvas-element iframe { width: 100%; height: 100%; display: block; border: 0; transform-origin: center center; will-change: transform; pointer-events: none; }
 .canvas-element.shape .element-content { padding: 0; }
 .inspector { display: block; }
@@ -165,6 +176,39 @@ label output { float: right; color: var(--mint); }
 .task span { flex: 1; }
 .task.done span { color: var(--muted); text-decoration: line-through; }
 .task button { background: transparent; color: #e89baa; font-size: 17px; }
+.calendar-form { max-width: none; margin-bottom: 18px; grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(130px, 1fr)) auto; align-items: end; gap: 10px; padding: 16px; }
+.calendar-form .calendar-title-field { min-width: 0; }
+.calendar-form button { min-height: 38px; white-space: nowrap; }
+.date-part-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.calendar-form-actions { display: flex; align-items: end; gap: 7px; }
+.calendar-form-actions button { flex: 1; }
+.calendar-columns { display: grid; grid-template-columns: minmax(320px, .85fr) minmax(420px, 1.35fr); gap: 14px; }
+.calendar-group { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.calendar-group.today { border-color: rgba(98,237,171,.5); background: linear-gradient(145deg, rgba(18,60,49,.68), var(--panel) 55%); }
+.calendar-group > header { min-height: 48px; margin-bottom: 13px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.calendar-group h3 { margin: 0; font-size: 16px; text-transform: capitalize; }
+.calendar-group > header > span { min-width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--mint); color: #052417; font-size: 12px; font-weight: 900; }
+.event-list { display: grid; gap: 8px; }
+.calendar-event { min-width: 0; padding: 11px; display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 9px; background: #091721; }
+.calendar-event time, .calendar-event div { min-width: 0; }
+.calendar-event time b, .calendar-event time span, .calendar-event strong, .calendar-event small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.calendar-event time b { color: var(--mint); font-size: 11px; text-transform: capitalize; }
+.calendar-event time span, .calendar-event small { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.calendar-event strong { font-size: 12px; }
+.calendar-event button { width: 30px; height: 30px; border-radius: 7px; background: transparent; color: #e89baa; font-size: 19px; }
+.calendar-event button:hover { background: #301a23; }
+.calendar-all { margin-top: 14px; padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.calendar-all > header { margin-bottom: 13px; }
+.calendar-all h3 { margin: 0; font-size: 16px; }
+.calendar-all header p:not(.eyebrow) { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+.calendar-master-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 8px; }
+.calendar-master { min-width: 0; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 9px; background: #091721; }
+.calendar-master > div:first-child { min-width: 0; }
+.calendar-master strong, .calendar-master small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.calendar-master strong { font-size: 12px; }
+.calendar-master small { margin-top: 5px; color: var(--muted); font-size: 9px; }
+.calendar-master-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+.calendar-master-actions button { min-height: 30px; padding: 6px 9px; font-size: 9px; }
 .tip { max-width: 780px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .settings-form { gap: 0; padding: 7px 22px 22px; }
 .setting-toggle { padding: 15px 2px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -179,6 +223,8 @@ label output { float: right; color: var(--mint); }
 @media (max-width: 1240px) {
   .editor-shell { grid-template-columns: 165px minmax(390px, 1fr) 215px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
+  .calendar-form { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+  .calendar-form button { align-self: end; }
 }
 @media (max-width: 1050px) {
   body { grid-template-columns: 1fr; }
@@ -187,4 +233,9 @@ label output { float: right; color: var(--mint); }
   .editor-shell { height: auto; grid-template-columns: 160px minmax(420px, 1fr); }
   .inspector { grid-column: 1 / -1; max-height: 360px; }
   .canvas-workarea { height: 600px; }
+  .calendar-columns { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-element.list-advancing .element-tasks ol, .canvas-element.list-advancing .element-calendar ol { animation: none; }
+  .list-text.is-overflowing { animation: none; transform: none; }
 }

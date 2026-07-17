@@ -1,6 +1,8 @@
 let settings;
 let stats;
 let timer;
+let listTimer;
+let lastCalendarDate;
 const root = document.getElementById('display-root');
 const isPreview = new URLSearchParams(location.search).get('preview') === '1';
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({
@@ -52,13 +54,30 @@ function metric(type) {
   return formatUptime(stats.uptime);
 }
 
-function taskMarkup(element) {
-  const remaining = settings.todos.filter((task) => !task.done).slice(0, element.maxItems || 4);
-  if (!remaining.length) return '<li>' + (settings.language === 'vi' ? window.JUNGLE_I18N.dynamicVi.done : 'All tasks completed') + '</li>';
-  return remaining.map((task) => '<li>' + escapeHtml(task.title) + '</li>').join('');
+function taskMarkup(element, page = 0) {
+  const remaining = settings.todos.filter((task) => !task.done);
+  const visible = window.JUNGLE_CALENDAR.pageItems(remaining, element.maxItems || 4, page).items;
+  if (!visible.length) return '<li><span class="list-text-viewport"><span class="list-text">' + (settings.language === 'vi' ? window.JUNGLE_I18N.dynamicVi.done : 'All tasks completed') + '</span></span></li>';
+  return visible.map((task) => '<li><span class="list-text-viewport"><span class="list-text">' + escapeHtml(task.title) + '</span></span></li>').join('');
 }
 
-function contentMarkup(element) {
+function calendarText(key) {
+  const english = { noEvents: 'No events', todayShort: 'Today', tomorrow: 'Tomorrow' };
+  return settings.language === 'vi' ? window.JUNGLE_I18N.dynamicVi[key] : english[key];
+}
+
+function calendarMarkup(element, page = 0) {
+  const occurrences = window.JUNGLE_CALENDAR.listOccurrences(settings.events || [], new Date(), 90, 200);
+  const visible = window.JUNGLE_CALENDAR.pageItems(occurrences, element.maxItems || 4, page).items;
+  if (!visible.length) return '<li><span class="list-text-viewport"><span class="list-text">' + escapeHtml(calendarText('noEvents')) + '</span></span></li>';
+  return visible.map((occurrence) => {
+    const day = occurrence.daysFromToday === 0 ? calendarText('todayShort') : occurrence.daysFromToday === 1 ? calendarText('tomorrow') : new Intl.DateTimeFormat(settings.language === 'vi' ? 'vi-VN' : 'en-GB', { day: '2-digit', month: '2-digit' }).format(occurrence.date);
+    const when = day + (occurrence.event.time ? ' · ' + occurrence.event.time : '');
+    return '<li><span class="calendar-when">' + escapeHtml(when) + '</span><span class="list-text-viewport"><span class="list-text">' + escapeHtml(occurrence.event.title) + '</span></span></li>';
+  }).join('');
+}
+
+function contentMarkup(element, page = 0) {
   const title = element.title ? '<span class="widget-label">' + escapeHtml(element.title) + '</span>' : '';
   if (element.type === 'video') {
     return element.source ? '<video src="' + escapeHtml(localMediaUrl(element.source)) + '" autoplay loop muted playsinline style="object-fit:' + element.fit + '"></video>' : '';
@@ -71,7 +90,8 @@ function contentMarkup(element) {
     return element.source ? '<img src="' + escapeHtml(localMediaUrl(element.source)) + '" style="object-fit:' + element.fit + '">' : '';
   }
   if (element.type === 'shape') return '';
-  if (element.type === 'tasks') return '<div class="widget-inner task-widget">' + title + '<ol>' + taskMarkup(element) + '</ol></div>';
+  if (element.type === 'tasks') return '<div class="widget-inner task-widget">' + title + '<ol>' + taskMarkup(element, page) + '</ol></div>';
+  if (element.type === 'calendar') return '<div class="widget-inner calendar-widget">' + title + '<ol>' + calendarMarkup(element, page) + '</ol></div>';
   if (element.type === 'text') return '<div class="widget-inner">' + title + '<b class="widget-value multiline">' + escapeHtml(element.text) + '</b></div>';
   if (element.type === 'clock') return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="clock">' + nowInfo().time + '</b></div>';
   if (element.type === 'date') return '<div class="widget-inner">' + title + '<b class="widget-value multiline" data-dynamic="date">' + escapeHtml(nowInfo().date) + '</b></div>';
@@ -81,11 +101,12 @@ function contentMarkup(element) {
 function contentSignature(element) {
   const signature = [element.type, element.title, element.text, element.source, element.maxItems];
   if (element.type === 'tasks') signature.push(settings.todos);
+  if (element.type === 'calendar') signature.push(settings.events, window.JUNGLE_CALENDAR.dateKey(new Date()), settings.language);
   return JSON.stringify(signature);
 }
 
 function resolvedLabelStyle(element) {
-  const scale = ['tasks', 'uptime'].includes(element.type) ? 1.52 : 0.38;
+  const scale = ['tasks', 'calendar', 'uptime'].includes(element.type) ? 1.52 : 0.38;
   return {
     color: element.labelColor || element.color,
     fontSize: Number.isFinite(Number(element.labelFontSize)) ? Number(element.labelFontSize) : element.fontSize * scale,
@@ -124,7 +145,7 @@ function styleWidget(node, element, refreshContent = true) {
     borderRadius: element.radius + 'px'
   });
   if (refreshContent) {
-    node.innerHTML = contentMarkup(element);
+    node.innerHTML = contentMarkup(element, Number(node.dataset.listPage) || 0);
     node.dataset.contentSignature = contentSignature(element);
   }
   styleWidgetLabel(node, element);
@@ -135,6 +156,62 @@ function styleWidget(node, element, refreshContent = true) {
     media.style.transform = 'scale(' + (element.mediaScale || 1) + ')';
   }
   if (refreshContent) node.querySelector('video')?.play().catch(() => {});
+  if (['tasks', 'calendar'].includes(element.type)) scheduleWidgetListMotion(node, element);
+}
+
+function rotatingItemCount(element) {
+  if (element.type === 'tasks') return settings.todos.filter((task) => !task.done).length;
+  if (element.type === 'calendar') return window.JUNGLE_CALENDAR.listOccurrences(settings.events || [], new Date(), 90, 200).length;
+  return 0;
+}
+
+function scheduleWidgetListMotion(node, element) {
+  const version = String((Number(node.dataset.motionVersion) || 0) + 1);
+  node.dataset.motionVersion = version;
+  requestAnimationFrame(() => {
+    if (node.isConnected && node.dataset.motionVersion === version) prepareWidgetListMotion(node, element);
+  });
+}
+
+function prepareWidgetListMotion(node, element) {
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const longest = [...node.querySelectorAll('.list-text')].reduce((maximum, target) => {
+    target.classList.remove('is-overflowing');
+    target.style.removeProperty('--marquee-distance');
+    target.style.removeProperty('--marquee-duration');
+    if (reduced) return maximum;
+    const distance = Math.max(0, target.scrollWidth - target.clientWidth);
+    if (distance < 2) return maximum;
+    const duration = window.JUNGLE_CALENDAR.marqueeDuration(distance);
+    target.style.setProperty('--marquee-distance', -distance + 'px');
+    target.style.setProperty('--marquee-duration', duration + 'ms');
+    void target.offsetWidth;
+    target.classList.add('is-overflowing');
+    return Math.max(maximum, duration);
+  }, 0);
+  const pageCount = Math.max(1, Math.ceil(rotatingItemCount(element) / (element.maxItems || 4)));
+  node.dataset.nextListAt = pageCount > 1 || longest > 0 ? String(Date.now() + longest + 3500) : '0';
+}
+
+function advanceWidgetLists() {
+  const now = Date.now();
+  root.querySelectorAll('.widget.tasks, .widget.calendar').forEach((node) => {
+    const due = Number(node.dataset.nextListAt) || 0;
+    if (!due || now < due) return;
+    const element = activeDisplay().canvas.elements.find((item) => item.id === node.dataset.elementId);
+    if (!element) return;
+    const pageCount = Math.max(1, Math.ceil(rotatingItemCount(element) / (element.maxItems || 4)));
+    const current = (Number(node.dataset.listPage) || 0) % pageCount;
+    const next = pageCount > 1 ? (current + 1) % pageCount : current;
+    node.dataset.listPage = next;
+    styleWidget(node, element, true);
+    if (next !== current) {
+      node.classList.remove('list-advancing');
+      void node.offsetWidth;
+      node.classList.add('list-advancing');
+      setTimeout(() => node.classList.remove('list-advancing'), 450);
+    }
+  });
 }
 
 function renderLayout() {
@@ -167,6 +244,9 @@ function renderLayout() {
 
 async function updateDynamic() {
   stats = await window.jungle.getSystem();
+  const calendarDate = window.JUNGLE_CALENDAR.dateKey(new Date());
+  if (lastCalendarDate && calendarDate !== lastCalendarDate) renderLayout();
+  lastCalendarDate = calendarDate;
   const now = nowInfo();
   document.querySelectorAll('[data-dynamic]').forEach((node) => {
     const type = node.dataset.dynamic;
@@ -178,8 +258,11 @@ async function start() {
   settings = await window.jungle.getSettings();
   stats = await window.jungle.getSystem();
   renderLayout();
+  lastCalendarDate = window.JUNGLE_CALENDAR.dateKey(new Date());
   clearInterval(timer);
+  clearInterval(listTimer);
   timer = setInterval(updateDynamic, 1000);
+  listTimer = setInterval(advanceWidgetLists, 200);
   window.jungle.onSettings((next) => {
     settings = next;
     renderLayout();
