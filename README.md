@@ -12,7 +12,7 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - Freeform canvas editor with drag, resize, exact position and layer controls.
 - Shift-click multi-selection with edge/center alignment and equal horizontal or vertical gaps.
 - Context-aware properties show only the controls supported by the selected element.
-- Clock, date, text, CPU, RAM, GPU, uptime, tasks, calendar reminders, shape, image, local video and YouTube elements.
+- Clock, date, text, CPU (load and temperature), RAM, GPU (load and temperature), uptime, tasks, calendar reminders, shape, image, local video and YouTube elements. CPU/GPU elements can independently show or hide usage and temperature, and resize vertically as content rows change.
 - Local calendar with Today, Upcoming and All Events views; events can be edited or deleted, with optional times and daily, weekly, monthly or yearly recurrence. Annual events only require a day and month.
 - Task and calendar widgets scroll overflowing row text horizontally, wait 3.5 seconds after the longest row finishes, then rotate through additional pages when the list exceeds the configured visible row count.
 - Video and YouTube are resizable canvas elements instead of forced full-screen modes.
@@ -25,6 +25,8 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - Local settings only; no telemetry or cloud account.
 
 The USB driver streams to one selected Jungle display at a time. Switching the active display disconnects the previous stream so frames cannot be sent to the wrong device.
+
+CPU and GPU temperatures depend on the sensors exposed by the operating system and hardware driver. On Windows, Jungle Display Studio reads LibreHardwareMonitor/OpenHardwareMonitor sensors when available, uses the ACPI thermal zone as a CPU fallback, and reads NVIDIA GPU temperature through `nvidia-smi`. Unsupported sensors are shown as `N/A`.
 
 ## Supported hardware
 
@@ -63,8 +65,8 @@ The generated x64 NSIS EXE and MSI files are written to **dist/**.
 
 Push a version tag matching package.json:
 
-    git tag v1.4.0
-    git push origin v1.4.0
+    git tag v1.4.1
+    git push origin v1.4.1
 
 The workflow in **.github/workflows/release.yml** validates, builds and attaches both installers to a GitHub Release.
 

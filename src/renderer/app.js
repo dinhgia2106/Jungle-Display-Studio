@@ -6,6 +6,12 @@ const esc = (value = "") => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&a
 const clamp = (value, min, max, fallback = min) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : fallback;
 
 const VI = window.JUNGLE_I18N.vi;
+const VI_LOCAL = {
+  "property.hardwareContent":"N\u1ed8I DUNG PH\u1ea6N C\u1ee8NG",
+  "property.showUsage":"Hi\u1ec3n th\u1ecb % s\u1eed d\u1ee5ng",
+  "property.showTemperature":"Hi\u1ec3n th\u1ecb nhi\u1ec7t \u0111\u1ed9",
+  "property.temperatureHelp":"Nhi\u1ec7t \u0111\u1ed9 CPU c\u1ea7n c\u1ea3m bi\u1ebfn do Windows ho\u1eb7c LibreHardwareMonitor cung c\u1ea5p."
+};
 const DYNAMIC = {
   en:{select:"Select",selected:"Selected",connect:"Connect",disconnect:"Disconnect",online:"ONLINE",offline:"OFFLINE",disconnected:"Disconnected",connecting:"Connecting",streaming:"Streaming",error:"Connection error",remaining:"{count} remaining",done:"All tasks completed",source:"Choose a source",saved:"Saved",saving:"Saving.",scanned:"Display scan complete",reset:"Restored defaults",multiSelected:"{count} selected",styleCopied:"Style copied",stylePasted:"Style pasted",noEvents:"No events",eventCount:"{count} events",allDay:"All day",todayShort:"Today",tomorrow:"Tomorrow",repeatDaily:"Daily",repeatWeekly:"Weekly",repeatMonthly:"Monthly",repeatYearly:"Yearly",deleteSeries:"Delete event / repeating series",editEvent:"Edit",deleteEvent:"Delete",addReminder:"Add reminder",updateReminder:"Save changes",cancel:"Cancel",annualOn:"Every year on {date}",startsOn:"Starts {date}",repeatsUntil:"until {date}"},
   vi: window.JUNGLE_I18N.dynamicVi
@@ -19,7 +25,7 @@ function applyLanguage() {
   document.documentElement.lang = settings.language;
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     if (!node.dataset.english) node.dataset.english = node.textContent;
-    node.textContent = settings.language === "vi" ? (VI[node.dataset.i18n] || node.dataset.english) : node.dataset.english;
+    node.textContent = settings.language === "vi" ? (VI_LOCAL[node.dataset.i18n] || VI[node.dataset.i18n] || node.dataset.english) : node.dataset.english;
   });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
     if (!node.dataset.englishPlaceholder) node.dataset.englishPlaceholder = node.placeholder;
@@ -49,6 +55,9 @@ function nowInfo() {
 function uptime(seconds) {
   const hours = Math.floor((seconds || 0) / 3600), minutes = Math.floor(((seconds || 0) % 3600) / 60);
   return String(hours).padStart(2,"0") + ":" + String(minutes).padStart(2,"0");
+}
+function temperature(value) {
+  return value != null && Number.isFinite(Number(value)) ? Math.round(Number(value)) + '\u00b0C' : 'N/A';
 }
 function metric(type) {
   if (!stats) return "--";
@@ -112,6 +121,11 @@ function elementHtml(element, page = 0) {
   if (element.type === "text") return '<div class="element-content">' + label + '<b class="element-value element-date">' + esc(element.text) + "</b></div>";
   if (element.type === "clock") return '<div class="element-content">' + label + '<b class="element-value" data-dynamic="clock">' + nowInfo().time + "</b></div>";
   if (element.type === "date") return '<div class="element-content">' + label + '<b class="element-value element-date" data-dynamic="date">' + esc(nowInfo().date) + "</b></div>";
+  if (["cpu","gpu"].includes(element.type)) {
+    const usage = element.showUsage !== false ? '<b class="element-value" data-dynamic="' + element.type + '">' + metric(element.type) + '</b>' : '';
+    const hardwareTemperature = element.showTemperature !== false ? '<b class="element-value" data-temperature="' + element.type + '">' + temperature(element.type === "cpu" ? stats?.cpuTemperature : stats?.gpu?.temperature) + '</b>' : '';
+    return '<div class="element-content">' + label + usage + hardwareTemperature + '</div>';
+  }
   return '<div class="element-content">' + label + '<b class="element-value" data-dynamic="' + element.type + '">' + metric(element.type) + "</b></div>";
 }
 function toast(message) {
@@ -141,7 +155,7 @@ function scaleCanvas() {
   wrap.style.width = Math.round(display.profile.width * canvasScale) + "px"; wrap.style.height = Math.round(display.profile.height * canvasScale) + "px";
 }
 function contentSignature(element) {
-  const signature=[element.type,element.title,element.text,element.source,element.maxItems];if(element.type==="tasks")signature.push(settings.todos);if(element.type==="calendar")signature.push(settings.events,window.JUNGLE_CALENDAR.dateKey(new Date()),settings.language);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
+  const signature=[element.type,element.title,element.text,element.source,element.maxItems,element.showUsage,element.showTemperature];if(element.type==="tasks")signature.push(settings.todos);if(element.type==="calendar")signature.push(settings.events,window.JUNGLE_CALENDAR.dateKey(new Date()),settings.language);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
 }
 function resolvedLabelStyle(element) {
   const scale = ["tasks","calendar","uptime"].includes(element.type) ? 1.52 : .38;
@@ -242,6 +256,8 @@ function renderInspector() {
   const values = {"prop-title":element.title,"prop-text":element.text,"prop-source":element.source,"prop-x":element.x,"prop-y":element.y,"prop-width":element.width,"prop-height":element.height,"prop-color":element.color,"prop-background":transparent?"#102832":element.background,"prop-font-size":element.fontSize,"prop-stroke-color":element.textStrokeColor||"#000000","prop-stroke-width":element.textStrokeWidth||0,"prop-label-color":resolvedLabelStyle(element).color,"prop-label-font-size":resolvedLabelStyle(element).fontSize,"prop-label-stroke-color":resolvedLabelStyle(element).strokeColor,"prop-label-stroke-width":resolvedLabelStyle(element).strokeWidth,"prop-radius":element.radius,"prop-opacity":Math.round(element.opacity*100),"prop-fit":element.fit,"prop-media-scale":Math.round((element.mediaScale||1)*100),"prop-max-items":element.maxItems};
   Object.entries(values).forEach(([id,value]) => $(id).value = value);
   $("prop-background-transparent").checked = transparent;
+  $("prop-show-usage").checked = element.showUsage !== false;
+  $("prop-show-temperature").checked = element.showTemperature !== false;
   $("prop-background").disabled = transparent;
   $("prop-type").textContent = element.type.toUpperCase();
   $("prop-selection-count").textContent = selectedElementIds.size > 1 ? tr("multiSelected",{count:selectedElementIds.size}) : element.id;
@@ -250,6 +266,7 @@ function renderInspector() {
   const textTypes = ["text","clock","date","cpu","ram","gpu","uptime","tasks","calendar"];
   const mediaTypes = ["video","youtube","image"];
   $("prop-title-row").hidden = !textTypes.includes(element.type);
+  $("prop-hardware-content").hidden = !["cpu","gpu"].includes(element.type);
   $("prop-text-row").hidden = element.type !== "text";
   $("prop-source-row").hidden = !mediaTypes.includes(element.type);
   $("pick-source").hidden = element.type === "youtube";
@@ -320,8 +337,9 @@ function renderSettings() {
 function updateDynamic() {
   const now=nowInfo(); $("clock").textContent=new Date().toLocaleTimeString(settings.language==="vi"?"vi-VN":"en-GB");
   const calendarDate=window.JUNGLE_CALENDAR.dateKey(new Date());if(lastCalendarDate&&lastCalendarDate!==calendarDate){renderCanvas();renderCalendar();}lastCalendarDate=calendarDate;
-  if(stats){$("cpu-stat").textContent=stats.cpuPercent+"%";$("cpu-name").textContent=stats.cpu;$("ram-stat").textContent=stats.memoryPercent+"%";$("ram-detail").textContent=stats.memoryUsedGb+" / "+stats.memoryTotalGb+" GB";$("gpu-stat").textContent=stats.gpu?.percent==null?"N/A":stats.gpu.percent+"%";$("gpu-name").textContent=stats.gpu?.name||"GPU unavailable";}
+  if(stats){$("cpu-stat").textContent=stats.cpuPercent+"%";$("cpu-name").textContent=temperature(stats.cpuTemperature)+" | "+stats.cpu;$("ram-stat").textContent=stats.memoryPercent+"%";$("ram-detail").textContent=stats.memoryUsedGb+" / "+stats.memoryTotalGb+" GB";$("gpu-stat").textContent=stats.gpu?.percent==null?"N/A":stats.gpu.percent+"%";$("gpu-name").textContent=temperature(stats.gpu?.temperature)+" | "+(stats.gpu?.name||"GPU unavailable");}
   document.querySelectorAll("[data-dynamic]").forEach((node)=>node.textContent=node.dataset.dynamic==="clock"?now.time:node.dataset.dynamic==="date"?now.date:metric(node.dataset.dynamic));
+  document.querySelectorAll("[data-temperature]").forEach((node)=>node.textContent=temperature(node.dataset.temperature==="cpu"?stats?.cpuTemperature:stats?.gpu?.temperature));
   const status=["connecting","streaming","error"].includes(deviceState?.status)?deviceState.status:"disconnected", side=document.querySelector(".sidebar-foot");
   side.className="sidebar-foot "+status;$("sidebar-status").textContent=tr(status)+(deviceState?.portPath?" · "+deviceState.portPath:"");$("stream-stat").textContent=(deviceState?.fps||0)+" FPS";$("frame-detail").textContent=deviceState?.frameBytes?Math.round(deviceState.frameBytes/1000)+" KB/frame":"--";
 }
@@ -343,7 +361,7 @@ function newElement(type){
   const display=activeDisplay(),p=display.profile,large=["video","youtube","image","tasks","calendar"].includes(type),w=Math.min(p.width,large?Math.max(240,Math.round(p.width*.46)):Math.max(150,Math.round(p.width*.23)));
   const h=Math.min(p.height,["video","youtube","image"].includes(type)?Math.max(140,Math.round(p.height*.42)):["tasks","calendar"].includes(type)?Math.max(160,Math.round(p.height*.55)):Math.max(80,Math.round(p.height*.23)));
   const labels={cpu:"CPU",ram:"RAM",gpu:"GPU",uptime:"UPTIME",tasks:"TASKS",calendar:"CALENDAR",clock:"TIME",date:"DATE"},fontSize=type==="clock"?52:28,labelScale=["tasks","calendar","uptime"].includes(type)?1.52:.38;
-  return{id:type+"-"+Date.now().toString(36),type,x:Math.max(0,Math.round((p.width-w)/2)),y:Math.max(0,Math.round((p.height-h)/2)),width:w,height:h,color:"#effaf5",background:type==="shape"?"#62edab":"#102832",fontSize,textStrokeColor:"#000000",textStrokeWidth:0,labelColor:"#effaf5",labelFontSize:Math.round(fontSize*labelScale*10)/10,labelStrokeColor:"#000000",labelStrokeWidth:0,opacity:1,radius:12,fit:"cover",mediaScale:1,z:Math.max(0,...display.canvas.elements.map((item)=>item.z))+1,title:labels[type]||"",text:type==="text"?"Your text":"",source:"",maxItems:4};
+  return{id:type+"-"+Date.now().toString(36),type,x:Math.max(0,Math.round((p.width-w)/2)),y:Math.max(0,Math.round((p.height-h)/2)),width:w,height:h,color:"#effaf5",background:type==="shape"?"#62edab":"#102832",fontSize,textStrokeColor:"#000000",textStrokeWidth:0,labelColor:"#effaf5",labelFontSize:Math.round(fontSize*labelScale*10)/10,labelStrokeColor:"#000000",labelStrokeWidth:0,opacity:1,radius:12,fit:"cover",mediaScale:1,z:Math.max(0,...display.canvas.elements.map((item)=>item.z))+1,title:labels[type]||"",text:type==="text"?"Your text":"",source:"",maxItems:4,showUsage:true,showTemperature:true};
 }
 function arrangeSelection(mode){
   const items=selectedElements();if(!items.length)return;
@@ -383,6 +401,15 @@ function inspectorChange(event){
   e.fontSize=Math.round(clamp($("prop-font-size").value,6,300,e.fontSize));e.textStrokeColor=$("prop-stroke-color").value;e.textStrokeWidth=Math.round(clamp($("prop-stroke-width").value,0,30,e.textStrokeWidth||0)*10)/10;e.labelColor=$("prop-label-color").value;e.labelFontSize=Math.round(clamp($("prop-label-font-size").value,4,400,resolvedLabelStyle(e).fontSize)*10)/10;e.labelStrokeColor=$("prop-label-stroke-color").value;e.labelStrokeWidth=Math.round(clamp($("prop-label-stroke-width").value,0,30,resolvedLabelStyle(e).strokeWidth)*10)/10;e.radius=Math.round(clamp($("prop-radius").value,0,200,e.radius));e.opacity=clamp($("prop-opacity").value/100,.05,1,1);e.fit=$("prop-fit").value;e.mediaScale=clamp($("prop-media-scale").value/100,.5,4,1);e.maxItems=Math.round(clamp($("prop-max-items").value,1,20,4));
   const refreshContent=["prop-title","prop-text","prop-source","prop-max-items"].includes(event?.target?.id);updateElementNode(e,refreshContent);$("prop-opacity-value").textContent=Math.round(e.opacity*100)+"%";$("prop-media-scale-value").textContent=Math.round(e.mediaScale*100)+"%";queueSave();
 }
+function setHardwareContentOption(property, checked) {
+  const element=selected();if(!element||!["cpu","gpu"].includes(element.type))return;
+  const before=Number(element.showUsage!==false)+Number(element.showTemperature!==false);
+  element[property]=checked;
+  const after=Number(element.showUsage!==false)+Number(element.showTemperature!==false);
+  const rowHeight=Math.max(12,Math.round(element.fontSize*.95)),profile=activeDisplay().profile;
+  element.height=Math.round(clamp(element.height+(after-before)*rowHeight,32,profile.height-element.y,element.height));
+  $("prop-height").value=element.height;updateElementNode(element,true);renderInspector();queueSave();
+}
 async function chooseDisplay(id){if(!settings.displays.some((item)=>item.id===id))return;settings.activeDisplayId=id;clearSelection();await saveRefresh(tr("saved"));}
 function bind(){
   document.addEventListener('visibilitychange',syncEditorMedia);
@@ -417,6 +444,8 @@ function bind(){
   document.addEventListener("pointerup",()=>{if(dragState){dragState=null;queueSave();}});
   ["prop-title","prop-text","prop-x","prop-y","prop-width","prop-height","prop-color","prop-background","prop-background-transparent","prop-font-size","prop-stroke-color","prop-stroke-width","prop-label-color","prop-label-font-size","prop-label-stroke-color","prop-label-stroke-width","prop-radius","prop-opacity","prop-fit","prop-media-scale","prop-max-items"].forEach((id)=>$(id).oninput=inspectorChange);
   $("prop-source").onchange=inspectorChange;
+  $("prop-show-usage").onchange=(event)=>setHardwareContentOption("showUsage",event.target.checked);
+  $("prop-show-temperature").onchange=(event)=>setHardwareContentOption("showTemperature",event.target.checked);
   $("copy-content-style").onclick=()=>copyTypographyStyle("content");$("paste-content-style").onclick=()=>pasteTypographyStyle("content");
   $("copy-label-style").onclick=()=>copyTypographyStyle("label");$("paste-label-style").onclick=()=>pasteTypographyStyle("label");
   document.querySelectorAll("[data-arrange]").forEach((button)=>button.onclick=()=>arrangeSelection(button.dataset.arrange));

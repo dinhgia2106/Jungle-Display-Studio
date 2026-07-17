@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const { JungleDisplayDriver } = require('./jungle-display');
 const { fitPreview } = require('./display-profile');
 const { normalizeWorkspace, activeDisplay } = require('./workspace');
+const { sampleTemperature } = require('./hardware-temperature');
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
@@ -26,7 +27,9 @@ let settingsCache;
 let quitting = false;
 let previousCpu = null;
 let cachedCpuPercent = 0;
+let cachedCpuTemperature = null;
 let cachedGpu = { available: false, name: 'GPU unavailable', percent: null, memoryUsedMb: null, memoryTotalMb: null, temperature: null };
+let samplingTemperatures = false;
 let reconnectTimer = null;
 let manualDisconnect = false;
 let hadConnection = false;
@@ -153,6 +156,19 @@ async function sampleGpu() {
   }
 }
 
+async function sampleTemperatures() {
+  if (samplingTemperatures) return;
+  samplingTemperatures = true;
+  try {
+    cachedCpuTemperature = await sampleTemperature('cpu', execFileAsync);
+    if (!/nvidia/i.test(cachedGpu.name)) {
+      cachedGpu = { ...cachedGpu, temperature: await sampleTemperature('gpu', execFileAsync) };
+    }
+  } finally {
+    samplingTemperatures = false;
+  }
+}
+
 function systemStats() {
   const cpus = os.cpus();
   const total = os.totalmem();
@@ -162,6 +178,7 @@ function systemStats() {
     cpu: cpus[0]?.model || 'CPU',
     cores: cpus.length,
     cpuPercent: cachedCpuPercent,
+    cpuTemperature: cachedCpuTemperature,
     memoryPercent: Math.round(((total - free) / total) * 100),
     memoryUsedGb: ((total - free) / 1024 ** 3).toFixed(1),
     memoryTotalGb: (total / 1024 ** 3).toFixed(1),
@@ -402,6 +419,14 @@ function createControlWindow() {
           document.querySelector('.nav[data-panel="canvas"]').click();
           await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           press('cpu');
+          const hardwareOptionsVisible = !document.getElementById('prop-hardware-content').hidden;
+          const cpuHeightWithBoth = parseFloat(document.querySelector('[data-element-id="cpu"]').style.height);
+          const temperatureToggle = document.getElementById('prop-show-temperature');
+          temperatureToggle.click();
+          const cpuHeightWithoutTemperature = parseFloat(document.querySelector('[data-element-id="cpu"]').style.height);
+          const temperatureToggleShrinks = cpuHeightWithoutTemperature < cpuHeightWithBoth;
+          temperatureToggle.click();
+          const temperatureToggleRestores = parseFloat(document.querySelector('[data-element-id="cpu"]').style.height) === cpuHeightWithBoth;
           const inspectorFiltered = document.getElementById('prop-items-row').hidden
             && document.getElementById('prop-text-row').hidden
             && getComputedStyle(document.getElementById('prop-items-row')).display === 'none';
@@ -511,6 +536,9 @@ function createControlWindow() {
             paletteItems: document.querySelectorAll('[data-add]').length,
             canvasElements: document.querySelectorAll('.canvas-element').length,
             translationDecoded: window.JUNGLE_I18N.vi['nav.overview'].includes(String.fromCodePoint(7893)),
+            hardwareOptionsVisible,
+            temperatureToggleShrinks,
+            temperatureToggleRestores,
             inspectorFiltered,
             outlineControlVisible,
             outlineInspectorFiltered,
@@ -541,6 +569,9 @@ function createControlWindow() {
         const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, youtubeWatchdog: (() => { const frame = document.querySelector('.widget.youtube iframe'); return Boolean(frame?.__jungleWatched) && Boolean(frame?.__jungleRetryTimer || frame?.dataset.youtubeLoaded === '1') && new URL(frame.src).searchParams.get('enablejsapi') === '1'; })(), videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '' })");
         const taskLayoutParity = control.taskLayoutSignature === display.taskLayoutSignature;
         if (!taskLayoutParity) throw new Error('Editor/output task layout mismatch: ' + control.taskLayoutSignature + ' !== ' + display.taskLayoutSignature);
+        if (!control.hardwareOptionsVisible || !control.temperatureToggleShrinks || !control.temperatureToggleRestores) {
+          throw new Error('Hardware content visibility controls did not resize the CPU element correctly.');
+        }
         controlWindow.close();
         await new Promise((resolve) => setTimeout(resolve, 100));
         const backgroundAfterClose = !controlWindow.isDestroyed() && !controlWindow.isVisible() && Boolean(tray && !tray.isDestroyed());
@@ -650,6 +681,8 @@ app.whenReady().then(async () => {
     cachedCpuPercent = cpuPercent();
   }, 1000);
   initializeGpu();
+  sampleTemperatures();
+  setInterval(sampleTemperatures, 5000);
   if (process.argv.includes('--smoke-test')) await ensureStreamWindow();
   await runStartupActions();
 });

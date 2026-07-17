@@ -3,6 +3,7 @@ const { BAUD_RATE, TARGET_FRAME_INTERVAL_MS, remainingFrameDelay, buildCommand, 
 const { sanitizeProfile, fitPreview } = require('../src/display-profile');
 const { defaultCanvas, normalizeWorkspace, activeDisplay, sanitizeCanvas } = require('../src/workspace');
 const { parseDateKey, occursOn, listOccurrences, pageItems, marqueeDuration } = require('../src/renderer/calendar');
+const { normalizeTemperature, parseTemperatureOutput, windowsSensorScript } = require('../src/hardware-temperature');
 
 assert.equal(BAUD_RATE, 2_000_000);
 assert.equal(Math.round(1000 / TARGET_FRAME_INTERVAL_MS), 30);
@@ -14,6 +15,15 @@ assert.equal(buildCommand(0x11).toString('hex'), '55aa0700111701');
 assert.equal(isJungleDisplayPort({ vendorId: '33c3', productId: '7788' }), true);
 assert.equal(isJungleDisplayPort({ vendorId: '33C3', productId: '7792' }), true);
 assert.equal(isJungleDisplayPort({ vendorId: '0402', productId: '3922' }), false);
+assert.equal(normalizeTemperature('63.45'), 63.5);
+assert.equal(normalizeTemperature('63,4'), 63.4);
+assert.equal(normalizeTemperature(null), null);
+assert.equal(normalizeTemperature(151), null);
+assert.equal(parseTemperatureOutput('  \r\n'), null);
+assert.equal(parseTemperatureOutput('\r\nnot-a-sensor\r\n72.25\r\n'), 72.3);
+assert.match(windowsSensorScript('cpu'), /MSAcpi_ThermalZoneTemperature/);
+assert.match(windowsSensorScript('cpu'), /High Precision Temperature/);
+assert.doesNotMatch(windowsSensorScript('gpu'), /MSAcpi_ThermalZoneTemperature/);
 
 assert.deepEqual(sanitizeProfile({ preset: 'custom', name: 'Portrait', width: 480, height: 800, rotation: 0 }), {
   preset: 'custom', name: 'Portrait', width: 480, height: 800, rotation: 0
@@ -26,6 +36,8 @@ assert.deepEqual(fitPreview({ width: 480, height: 800 }), { width: 384, height: 
 const canvas = defaultCanvas({ width: 960, height: 480, rotation: 180 });
 assert.equal(canvas.elements.some((element) => element.type === 'gpu'), true);
 assert.equal(canvas.elements.some((element) => element.type === 'tasks'), true);
+assert.equal(canvas.elements.find((element) => element.type === 'cpu').showUsage, true);
+assert.equal(canvas.elements.find((element) => element.type === 'cpu').showTemperature, true);
 
 const legacy = normalizeWorkspace({
   language: 'vi',
@@ -112,5 +124,11 @@ assert.equal(splitTypography.elements[0].labelStrokeWidth, 2.5);
 const calendarCanvas = sanitizeCanvas({ elements: [{ id: 'reminders', type: 'calendar', maxItems: 50 }] }, { width: 960, height: 480 });
 assert.equal(calendarCanvas.elements[0].type, 'calendar');
 assert.equal(calendarCanvas.elements[0].maxItems, 20);
+
+const hardwareCanvas = sanitizeCanvas({
+  elements: [{ id: 'cpu-options', type: 'cpu', showUsage: false, showTemperature: true }]
+}, { width: 960, height: 480 });
+assert.equal(hardwareCanvas.elements[0].showUsage, false);
+assert.equal(hardwareCanvas.elements[0].showTemperature, true);
 
 console.log('Jungle Display protocol, profile and workspace checks passed.');

@@ -104,6 +104,12 @@
               </div>
             </section>
             <label id="prop-title-row"><span data-i18n="property.title">Label</span><input id="prop-title" maxlength="80" /></label>
+            <section class="text-style-card" id="prop-hardware-content">
+              <h4 data-i18n="property.hardwareContent">Hardware content</h4>
+              <label class="compact-toggle"><input id="prop-show-usage" type="checkbox" /><span data-i18n="property.showUsage">Show usage %</span></label>
+              <label class="compact-toggle"><input id="prop-show-temperature" type="checkbox" /><span data-i18n="property.showTemperature">Show temperature</span></label>
+              <small data-i18n="property.temperatureHelp">CPU temperature requires a sensor exposed by Windows or LibreHardwareMonitor.</small>
+            </section>
             <label id="prop-text-row"><span data-i18n="property.text">Text</span><textarea id="prop-text" maxlength="500"></textarea></label>
             <label id="prop-source-row"><span data-i18n="property.source">Source</span><div class="input-action"><input id="prop-source" /><button id="pick-source" class="icon-button">...</button></div></label>
             <div class="field-grid four" id="prop-position-row">

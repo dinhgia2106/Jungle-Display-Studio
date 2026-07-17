@@ -70,7 +70,7 @@ function defaultElements(profile = DEFAULT_PROFILE) {
     color: '#effaf5', background: '#102832', fontSize: Math.max(12, Math.round(28 * Math.min(sx, sy))),
     textStrokeColor: '#000000', textStrokeWidth: 0,
     opacity: 1, radius: Math.max(4, Math.round(12 * Math.min(sx, sy))), fit: 'cover', mediaScale: 1, z: 1,
-    title: '', text: '', source: '', maxItems: 4, ...extra
+    title: '', text: '', source: '', maxItems: 4, showUsage: true, showTemperature: true, ...extra
   });
   return [
     box('clock', 'clock', 20, 18, 220, 112, { background: '#0b1d26', fontSize: 54, title: 'TIME' }),
@@ -112,7 +112,9 @@ function elementDefaults(type, index) {
     title: labels[type] || '',
     text: type === 'text' ? 'Your text' : '',
     source: '',
-    maxItems: 4
+    maxItems: 4,
+    showUsage: true,
+    showTemperature: true
   };
 }
 
@@ -151,7 +153,9 @@ function sanitizeElement(value, profile, index) {
     title: String(base.title || '').slice(0, 80),
     text: String(base.text || '').slice(0, 500),
     source: String(base.source || '').slice(0, 2048),
-    maxItems: clamp(base.maxItems, 1, 20, 4)
+    maxItems: clamp(base.maxItems, 1, 20, 4),
+    showUsage: base.showUsage !== false,
+    showTemperature: base.showTemperature !== false
   };
 }
 

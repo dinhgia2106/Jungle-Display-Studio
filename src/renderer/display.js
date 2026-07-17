@@ -45,6 +45,9 @@ function formatUptime(seconds) {
   const minutes = Math.floor(((seconds || 0) % 3600) / 60);
   return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
 }
+function temperature(value) {
+  return value != null && Number.isFinite(Number(value)) ? Math.round(Number(value)) + '\u00b0C' : 'N/A';
+}
 
 function metric(type) {
   if (!stats) return '--';
@@ -95,11 +98,16 @@ function contentMarkup(element, page = 0) {
   if (element.type === 'text') return '<div class="widget-inner">' + title + '<b class="widget-value multiline">' + escapeHtml(element.text) + '</b></div>';
   if (element.type === 'clock') return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="clock">' + nowInfo().time + '</b></div>';
   if (element.type === 'date') return '<div class="widget-inner">' + title + '<b class="widget-value multiline" data-dynamic="date">' + escapeHtml(nowInfo().date) + '</b></div>';
+  if (['cpu', 'gpu'].includes(element.type)) {
+    const usage = element.showUsage !== false ? '<b class="widget-value" data-dynamic="' + element.type + '">' + metric(element.type) + '</b>' : '';
+    const hardwareTemperature = element.showTemperature !== false ? '<b class="widget-value" data-temperature="' + element.type + '">' + temperature(element.type === 'cpu' ? stats?.cpuTemperature : stats?.gpu?.temperature) + '</b>' : '';
+    return '<div class="widget-inner">' + title + usage + hardwareTemperature + '</div>';
+  }
   return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="' + element.type + '">' + metric(element.type) + '</b></div>';
 }
 
 function contentSignature(element) {
-  const signature = [element.type, element.title, element.text, element.source, element.maxItems];
+  const signature = [element.type, element.title, element.text, element.source, element.maxItems, element.showUsage, element.showTemperature];
   if (element.type === 'tasks') signature.push(settings.todos);
   if (element.type === 'calendar') signature.push(settings.events, window.JUNGLE_CALENDAR.dateKey(new Date()), settings.language);
   return JSON.stringify(signature);
@@ -252,6 +260,9 @@ async function updateDynamic() {
   document.querySelectorAll('[data-dynamic]').forEach((node) => {
     const type = node.dataset.dynamic;
     node.textContent = type === 'clock' ? now.time : type === 'date' ? now.date : metric(type);
+  });
+  document.querySelectorAll('[data-temperature]').forEach((node) => {
+    node.textContent = temperature(node.dataset.temperature === 'cpu' ? stats?.cpuTemperature : stats?.gpu?.temperature);
   });
 }
 
