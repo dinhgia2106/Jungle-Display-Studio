@@ -65,8 +65,8 @@ The generated x64 NSIS EXE and MSI files are written to **dist/**.
 
 Push a version tag matching package.json:
 
-    git tag v1.4.1
-    git push origin v1.4.1
+    git tag v1.4.2
+    git push origin v1.4.2
 
 The workflow in **.github/workflows/release.yml** validates, builds and attaches both installers to a GitHub Release.
 
