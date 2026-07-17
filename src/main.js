@@ -18,6 +18,7 @@ if (!hasSingleInstanceLock) app.quit();
 
 let controlWindow;
 let streamWindow;
+let streamWindowReady;
 let previewWindow;
 let tray;
 let driver;
@@ -229,6 +230,7 @@ function handleDriverState(state) {
     clearReconnectTimer();
   } else if (state.status === 'error' || state.status === 'disconnected') {
     scheduleReconnect();
+    if (!getSettings().startup.autoReconnect && !process.argv.includes('--smoke-test')) releaseStreamWindow();
   }
 }
 
@@ -240,6 +242,7 @@ async function runStartupActions() {
   if (settings.startup.autoConnect) {
     manualDisconnect = false;
     hadConnection = settings.startup.autoReconnect;
+    await ensureStreamWindow();
     await driver.connect(display.portPath, display.brightness);
   }
 }
@@ -254,6 +257,7 @@ function rendererPreferences() {
 }
 
 function createStreamWindow() {
+  if (streamWindow && !streamWindow.isDestroyed()) return streamWindowReady;
   const profile = activeDisplay(getSettings()).profile;
   streamWindow = new BrowserWindow({
     width: profile.width,
@@ -264,14 +268,28 @@ function createStreamWindow() {
     webPreferences: rendererPreferences()
   });
   streamWindow.setMenuBarVisibility(false);
-  streamWindow.webContents.once('did-finish-load', runStartupActions);
-  streamWindow.loadFile(path.join(__dirname, 'renderer', 'display.html'));
-  streamWindow.on('close', (event) => {
-    if (!quitting) {
-      event.preventDefault();
-      streamWindow.hide();
-    }
+  streamWindowReady = new Promise((resolve, reject) => {
+    streamWindow.webContents.once('did-finish-load', resolve);
+    streamWindow.webContents.once('did-fail-load', (_, code, description) => {
+      reject(new Error(`Display renderer failed to load (${code}): ${description}`));
+    });
   });
+  streamWindow.loadFile(path.join(__dirname, 'renderer', 'display.html'));
+  streamWindow.on('closed', () => {
+    streamWindow = null;
+    streamWindowReady = null;
+  });
+  return streamWindowReady;
+}
+
+async function ensureStreamWindow() {
+  await createStreamWindow();
+  return streamWindow;
+}
+
+function releaseStreamWindow() {
+  if (!streamWindow || streamWindow.isDestroyed()) return;
+  streamWindow.destroy();
 }
 
 function openPreviewWindow() {
@@ -327,6 +345,26 @@ function createTray() {
   tray.on('double-click', showControlWindow);
 }
 
+function encodeJpegWithinLimit(image, maxFrameBytes) {
+  let jpeg = image.toJPEG(82);
+  if (jpeg.length <= maxFrameBytes) return jpeg;
+  let low = 4;
+  let high = 76;
+  let best = image.toJPEG(low);
+  if (best.length > maxFrameBytes) return best;
+  while (low <= high) {
+    const quality = Math.floor((low + high) / 2);
+    const candidate = image.toJPEG(quality);
+    if (candidate.length <= maxFrameBytes) {
+      best = candidate;
+      low = quality + 1;
+    } else {
+      high = quality - 1;
+    }
+  }
+  return best;
+}
+
 async function captureFrame() {
   if (!streamWindow || streamWindow.isDestroyed()) throw new Error('The display renderer is not ready.');
   const display = activeDisplay(getSettings());
@@ -334,11 +372,7 @@ async function captureFrame() {
   const height = display.profile.height;
   let image = await streamWindow.webContents.capturePage();
   image = image.resize({ width, height, quality: 'good' });
-  let jpeg = image.toJPEG(82);
-  for (let quality = 76; jpeg.length > display.maxFrameBytes && quality >= 4; quality -= 8) {
-    jpeg = image.toJPEG(quality);
-  }
-  return jpeg;
+  return encodeJpegWithinLimit(image, display.maxFrameBytes);
 }
 
 function createControlWindow() {
@@ -547,6 +581,7 @@ function registerIpc() {
       hadConnection = false;
       clearReconnectTimer();
       await driver.disconnect();
+      releaseStreamWindow();
     }
 
     resizeRenderers(nextDisplay.profile);
@@ -579,13 +614,16 @@ function registerIpc() {
     }
     manualDisconnect = false;
     const display = activeDisplay(getSettings());
+    await ensureStreamWindow();
     return driver.connect(target.path || display.portPath, display.brightness);
   });
   ipcMain.handle('device:disconnect', async () => {
     manualDisconnect = true;
     hadConnection = false;
     clearReconnectTimer();
-    return driver.disconnect();
+    const state = await driver.disconnect();
+    releaseStreamWindow();
+    return state;
   });
   ipcMain.handle('preview:open', () => {
     openPreviewWindow();
@@ -605,7 +643,6 @@ app.whenReady().then(async () => {
   );
   driver = new JungleDisplayDriver({ captureFrame, onState: handleDriverState });
   registerIpc();
-  createStreamWindow();
   createControlWindow();
   createTray();
   cpuPercent();
@@ -613,6 +650,8 @@ app.whenReady().then(async () => {
     cachedCpuPercent = cpuPercent();
   }, 1000);
   initializeGpu();
+  if (process.argv.includes('--smoke-test')) await ensureStreamWindow();
+  await runStartupActions();
 });
 
 app.on('second-instance', () => {

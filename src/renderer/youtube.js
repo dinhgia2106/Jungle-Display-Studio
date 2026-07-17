@@ -1,5 +1,4 @@
 (() => {
-  const frames = new Set();
   const MAX_RETRIES = 5;
 
   function embedUrl(id, retryToken = '') {
@@ -35,8 +34,8 @@
   function scheduleRetry(frame, delay = 12000) {
     clearRetry(frame);
     frame.__jungleRetryTimer = setTimeout(() => {
+      frame.__jungleRetryTimer = null;
       if (!frame.isConnected || frame.dataset.youtubeLoaded === '1') {
-        frames.delete(frame);
         return;
       }
       const attempt = Number(frame.dataset.youtubeAttempt || 0) + 1;
@@ -60,7 +59,6 @@
     if (!frame || frame.__jungleWatched) return;
     frame.__jungleWatched = true;
     frame.id ||= 'jungle-youtube-' + Math.random().toString(36).slice(2);
-    frames.add(frame);
     frame.addEventListener('load', () => {
       frame.dataset.youtubeLoaded = '1';
       clearRetry(frame);
@@ -69,11 +67,22 @@
     scheduleRetry(frame);
   }
 
+  function unwatch(container) {
+    const watchedFrames = [];
+    if (container?.matches?.('iframe[data-youtube-id]')) watchedFrames.push(container);
+    container?.querySelectorAll?.('iframe[data-youtube-id]').forEach((frame) => watchedFrames.push(frame));
+    watchedFrames.forEach((frame) => {
+      clearRetry(frame);
+      frame.__jungleWatched = false;
+    });
+  }
+
   window.addEventListener('message', (event) => {
     let hostname = '';
     try { hostname = new URL(event.origin).hostname; } catch { return; }
     if (!/youtube(?:-nocookie)?\.com$/i.test(hostname)) return;
-    const frame = [...frames].find((candidate) => candidate.isConnected && candidate.contentWindow === event.source);
+    const frame = [...document.querySelectorAll('iframe[data-youtube-id]')]
+      .find((candidate) => candidate.contentWindow === event.source);
     if (!frame) return;
     let data = event.data;
     try { if (typeof data === 'string') data = JSON.parse(data); } catch { return; }
@@ -89,5 +98,5 @@
     }
   });
 
-  window.JUNGLE_YOUTUBE = Object.freeze({ embedUrl, watch });
+  window.JUNGLE_YOUTUBE = Object.freeze({ embedUrl, watch, unwatch });
 })();

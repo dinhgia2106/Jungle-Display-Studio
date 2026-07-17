@@ -129,6 +129,7 @@ function styleWidgetLabel(node, element) {
 }
 
 function styleWidget(node, element, refreshContent = true) {
+  if (refreshContent) window.JUNGLE_YOUTUBE.unwatch(node);
   Object.assign(node.style, {
     left: element.x + 'px',
     top: element.y + 'px',

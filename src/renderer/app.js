@@ -1,5 +1,6 @@
 let settings, stats, deviceState;
 let scannedDevices = [], selectedElementId = null, selectedElementIds = new Set(), dragState = null, typographyClipboard = null, canvasScale = 1, saveTimer, toastTimer, saveRevision = 0, lastCalendarDate, editingEventId = null;
+let editorMediaEnabledState = null;
 const $ = (id) => document.getElementById(id);
 const esc = (value = "") => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
 const clamp = (value, min, max, fallback = min) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : fallback;
@@ -74,6 +75,28 @@ function occurrenceDay(occurrence, compact = false) {
 function calendarHtml(element, page = 0) {
   const occurrences=calendarOccurrences(90,200),items=window.JUNGLE_CALENDAR.pageItems(occurrences,element.maxItems||4,page).items;
   return items.length ? items.map((occurrence)=>'<li><span class="calendar-when">'+esc(occurrenceDay(occurrence,true))+(occurrence.event.time?" · "+esc(occurrence.event.time):"")+'</span><span class="list-text-viewport"><span class="list-text">'+esc(occurrence.event.title)+'</span></span></li>').join("") : '<li><span class="list-text-viewport"><span class="list-text">'+esc(tr("noEvents"))+"</span></span></li>";
+}
+function editorMediaActive() {
+  return document.visibilityState !== 'hidden' && document.querySelector('.nav.active')?.dataset.panel === 'canvas';
+}
+function syncEditorMedia() {
+  const enabled = editorMediaActive();
+  const changed = enabled !== editorMediaEnabledState;
+  editorMediaEnabledState = enabled;
+  if (enabled && !changed) return;
+  document.querySelectorAll('#layout-canvas .canvas-element').forEach((node) => {
+    const element = activeDisplay().canvas.elements.find((item) => item.id === node.dataset.elementId);
+    if (!element || !['video','youtube','image'].includes(element.type)) return;
+    if (enabled) {
+      styleElement(node,element,true);
+      return;
+    }
+    window.JUNGLE_YOUTUBE.unwatch(node);
+    const media = node.querySelector('video,img,iframe');
+    media?.pause?.();
+    media?.removeAttribute('src');
+    media?.load?.();
+  });
 }
 function elementHtml(element, page = 0) {
   const label = element.title ? '<span class="element-label">' + esc(element.title) + "</span>" : "";
@@ -160,6 +183,7 @@ function styleElementLabel(node, element) {
   Object.assign(label.style,{color:style.color,fontSize:style.fontSize+"px",WebkitTextStrokeColor:style.strokeColor,WebkitTextStrokeWidth:style.strokeWidth+"px",paintOrder:"stroke fill"});
 }
 function styleElement(node, element, refreshContent = true) {
+  if (refreshContent) window.JUNGLE_YOUTUBE.unwatch(node);
   Object.assign(node.style,{left:element.x+"px",top:element.y+"px",width:element.width+"px",height:element.height+"px",zIndex:element.z,color:element.color,backgroundColor:element.background,fontSize:element.fontSize+"px",WebkitTextStrokeColor:element.textStrokeColor||"#000000",WebkitTextStrokeWidth:(element.textStrokeWidth||0)+"px",paintOrder:"stroke fill",opacity:element.opacity,borderRadius:element.radius+"px"});
   if (refreshContent) { node.innerHTML = elementHtml(element,Number(node.dataset.listPage)||0) + '<i class="resize-handle"></i>';node.dataset.contentSignature=contentSignature(element); }
   styleElementLabel(node,element);
@@ -192,6 +216,7 @@ function refreshCanvasSelection() {
   document.querySelectorAll(".canvas-element").forEach((node)=>node.classList.toggle("selected",selectedElementIds.has(node.dataset.elementId)));renderInspector();
 }
 function renderCanvas() {
+  requestAnimationFrame(syncEditorMedia);
   const display = activeDisplay(), canvas = display.canvas, stage = $("layout-canvas");
   $("canvas-name").textContent = display.name; $("canvas-size").textContent = display.profile.width + " x " + display.profile.height;
   $("canvas-background").value = canvas.background; $("canvas-background-image").value = canvas.backgroundImage || "";
@@ -360,6 +385,8 @@ function inspectorChange(event){
 }
 async function chooseDisplay(id){if(!settings.displays.some((item)=>item.id===id))return;settings.activeDisplayId=id;clearSelection();await saveRefresh(tr("saved"));}
 function bind(){
+  document.addEventListener('visibilitychange',syncEditorMedia);
+  document.addEventListener('click',(event)=>{if(event.target.closest('.nav'))syncEditorMedia();});
   document.querySelectorAll(".nav").forEach((button)=>button.onclick=()=>{document.querySelectorAll(".nav").forEach((item)=>item.classList.toggle("active",item===button));document.querySelectorAll(".panel").forEach((panel)=>panel.classList.toggle("active",panel.id===button.dataset.panel));if(button.dataset.panel==="canvas")requestAnimationFrame(scaleCanvas);});
   $("language").onchange=async(e)=>{settings.language=e.target.value;await saveRefresh(tr("saved"));};$("scan-devices").onclick=scan;$("scan-display").onclick=scan;$("preview-main").onclick=$("preview-canvas").onclick=()=>window.jungle.openPreview();
   $("canvas-display-select").onchange=$("config-display-select").onchange=(e)=>chooseDisplay(e.target.value);$("canvas-zoom").onchange=scaleCanvas;window.addEventListener("resize",()=>requestAnimationFrame(scaleCanvas));

@@ -1,10 +1,13 @@
 const assert = require('node:assert/strict');
-const { BAUD_RATE, buildCommand, isJungleDisplayPort } = require('../src/jungle-display');
+const { BAUD_RATE, TARGET_FRAME_INTERVAL_MS, remainingFrameDelay, buildCommand, isJungleDisplayPort } = require('../src/jungle-display');
 const { sanitizeProfile, fitPreview } = require('../src/display-profile');
 const { defaultCanvas, normalizeWorkspace, activeDisplay, sanitizeCanvas } = require('../src/workspace');
 const { parseDateKey, occursOn, listOccurrences, pageItems, marqueeDuration } = require('../src/renderer/calendar');
 
 assert.equal(BAUD_RATE, 2_000_000);
+assert.equal(Math.round(1000 / TARGET_FRAME_INTERVAL_MS), 30);
+assert.equal(Math.round(remainingFrameDelay(10)), 23);
+assert.equal(remainingFrameDelay(50), 0);
 assert.equal(buildCommand(0x06).toString('hex'), '55aa0700060c01');
 assert.equal(buildCommand(0x03, Buffer.from([100])).toString('hex'), '55aa080003646e01');
 assert.equal(buildCommand(0x11).toString('hex'), '55aa0700111701');

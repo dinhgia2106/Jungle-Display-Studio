@@ -4,6 +4,11 @@ const deviceProfiles = require('./device-profiles.json');
 const JUNGLE_SERIAL_IDS = new Set(deviceProfiles.devices.map(({ vendorId, productId }) =>
   String(vendorId).toUpperCase() + ':' + String(productId).toUpperCase()));
 const BAUD_RATE = Number(deviceProfiles.baudRate) || 2_000_000;
+const TARGET_FRAME_INTERVAL_MS = 1000 / 30;
+
+function remainingFrameDelay(elapsedMs, intervalMs = TARGET_FRAME_INTERVAL_MS) {
+  return Math.max(0, intervalMs - Math.max(0, Number(elapsedMs) || 0));
+}
 
 function normalizedId(port) {
   return `${String(port.vendorId || '').toUpperCase()}:${String(port.productId || '').toUpperCase()}`;
@@ -143,6 +148,7 @@ class JungleDisplayDriver {
 
   async streamLoop() {
     while (this.running && this.isConnected) {
+      const frameStartedAt = Date.now();
       try {
         if (Date.now() - this.lastKeepAlive >= 1400) {
           await this.sendCommand(0x11);
@@ -162,7 +168,8 @@ class JungleDisplayDriver {
             frameBytes: frame.length, totalBytes: this.bytes
           });
         }
-        await new Promise((resolve) => setTimeout(resolve, 16));
+        const delay = remainingFrameDelay(Date.now() - frameStartedAt);
+        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       } catch (error) {
         if (this.running) this.fail(error);
         break;
@@ -193,4 +200,4 @@ class JungleDisplayDriver {
   }
 }
 
-module.exports = { JungleDisplayDriver, BAUD_RATE, buildCommand, isJungleDisplayPort };
+module.exports = { JungleDisplayDriver, BAUD_RATE, TARGET_FRAME_INTERVAL_MS, remainingFrameDelay, buildCommand, isJungleDisplayPort };

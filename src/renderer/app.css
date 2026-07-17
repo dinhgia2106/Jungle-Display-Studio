@@ -130,7 +130,7 @@ label output { float: right; color: var(--mint); }
 .canvas-element.list-advancing .element-tasks ol, .canvas-element.list-advancing .element-calendar ol { animation: list-advance .38s ease-out both; }
 @keyframes list-advance { from { opacity: .15; transform: translateY(12%); } to { opacity: 1; transform: translateY(0); } }
 @keyframes horizontal-marquee { from { transform: translateX(0); } to { transform: translateX(var(--marquee-distance)); } }
-.canvas-element video, .canvas-element img, .canvas-element iframe { width: 100%; height: 100%; display: block; border: 0; transform-origin: center center; will-change: transform; pointer-events: none; }
+.canvas-element video, .canvas-element img, .canvas-element iframe { width: 100%; height: 100%; display: block; border: 0; transform-origin: center center; pointer-events: none; }
 .canvas-element.shape .element-content { padding: 0; }
 .inspector { display: block; }
 .inspector-empty { padding: 22px 8px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
