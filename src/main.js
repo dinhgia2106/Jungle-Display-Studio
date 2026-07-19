@@ -188,7 +188,9 @@ function systemStats() {
     memoryPercent: Math.round(((total - free) / total) * 100),
     memoryUsedGb: ((total - free) / 1024 ** 3).toFixed(1),
     memoryTotalGb: (total / 1024 ** 3).toFixed(1),
-    uptime: Math.floor(os.uptime()),
+    // Windows Fast Startup can preserve os.uptime() across shutdowns. The app
+    // starts fresh for each user session, so this better matches visible uptime.
+    uptime: Math.floor(process.uptime()),
     gpu: { ...cachedGpu }
   };
 }

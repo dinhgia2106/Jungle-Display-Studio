@@ -49,6 +49,7 @@
       const id = frame.dataset.youtubeId;
       frame.dataset.youtubeLoaded = '0';
       frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeReloading = '1';
       frame.src = embedUrl(id, Date.now() + '-' + attempt);
       scheduleRetry(frame, retryDelay(attempt));
     }, delay);
@@ -70,6 +71,8 @@
       // armed until the Player API proves that the actual player is ready.
       frame.dataset.youtubeLoaded = '0';
       frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeErrored = '0';
+      frame.dataset.youtubeReloading = '0';
       const attempt = Number(frame.dataset.youtubeAttempt || 0);
       scheduleRetry(frame, attempt ? retryDelay(attempt) : INITIAL_RETRY_DELAY);
       setTimeout(() => frame.isConnected && requestPlayerEvents(frame), 250);
@@ -98,10 +101,17 @@
     try { if (typeof data === 'string') data = JSON.parse(data); } catch { return; }
     if (data?.event === 'onError') {
       frame.dataset.youtubeLoaded = '0';
+      frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeErrored = '1';
       scheduleRetry(frame, 1500);
       return;
     }
     if (['onReady', 'infoDelivery', 'initialDelivery'].includes(data?.event)) {
+      // An errored player can continue emitting delivery messages. They are
+      // stale health signals and must not cancel the recovery reload.
+      if (frame.dataset.youtubeErrored === '1' || frame.dataset.youtubeReloading === '1') {
+        return;
+      }
       frame.dataset.youtubeReady = '1';
       frame.dataset.youtubeLoaded = '1';
       frame.dataset.youtubeAttempt = '0';
