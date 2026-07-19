@@ -98,8 +98,8 @@ assert.equal(youtubeFixture.frame.__jungleWatched, true);
 assert.equal(youtubeFixture.timers.has(youtubeFixture.frame.__jungleRetryTimer), true);
 
 youtubeFixture.frameListeners.load();
-assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '0');
-assert.equal(youtubeFixture.timers.has(youtubeFixture.frame.__jungleRetryTimer), true);
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '1');
+assert.equal(youtubeFixture.frame.__jungleRetryTimer, null);
 
 youtubeFixture.sendPlayerEvent('onReady');
 assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '1');
@@ -117,16 +117,18 @@ assert.equal(youtubeFixture.frame.__jungleRetryTimer, errorRetryTimer);
 youtubeFixture.frame.dataset.youtubeAttempt = '5';
 youtubeFixture.timers.get(errorRetryTimer).callback();
 assert.equal(youtubeFixture.frame.dataset.youtubeAttempt, '6');
+assert.equal(youtubeFixture.frame.dataset.youtubeErrored, '0');
 assert.equal(youtubeFixture.frame.dataset.youtubeReloading, '1');
 assert.equal(youtubeFixture.timers.get(youtubeFixture.frame.__jungleRetryTimer).delay, 60000);
 assert.match(youtubeFixture.frame.src, /jungle_retry=/);
-youtubeFixture.sendPlayerEvent('onReady');
-assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '0');
-assert.equal(youtubeFixture.timers.has(youtubeFixture.frame.__jungleRetryTimer), true);
 youtubeFixture.frameListeners.load();
 assert.equal(youtubeFixture.frame.dataset.youtubeErrored, '0');
 assert.equal(youtubeFixture.frame.dataset.youtubeReloading, '0');
-assert.equal(youtubeFixture.timers.get(youtubeFixture.frame.__jungleRetryTimer).delay, 60000);
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '1');
+assert.equal(youtubeFixture.frame.__jungleRetryTimer, null);
+youtubeFixture.sendPlayerEvent('onReady');
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '1');
+assert.equal(youtubeFixture.frame.__jungleRetryTimer, null);
 
 youtubeFixture.youtube.unwatch(youtubeFixture.frame);
 assert.equal(youtubeFixture.frame.__jungleWatched, false);

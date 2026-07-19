@@ -32,6 +32,14 @@
     frame.__jungleRetryTimer = null;
   }
 
+  function markHealthy(frame) {
+    frame.dataset.youtubeReady = '1';
+    frame.dataset.youtubeLoaded = '1';
+    frame.dataset.youtubeAttempt = '0';
+    clearRetry(frame);
+    post(frame, { event: 'command', func: 'playVideo', args: [] });
+  }
+
   function retryDelay(attempt) {
     if (attempt <= 5) return 10000 + attempt * 4000;
     return Math.min(MAX_RETRY_DELAY, 60000 * (2 ** Math.min(3, attempt - 6)));
@@ -49,6 +57,7 @@
       const id = frame.dataset.youtubeId;
       frame.dataset.youtubeLoaded = '0';
       frame.dataset.youtubeReady = '0';
+      frame.dataset.youtubeErrored = '0';
       frame.dataset.youtubeReloading = '1';
       frame.src = embedUrl(id, Date.now() + '-' + attempt);
       scheduleRetry(frame, retryDelay(attempt));
@@ -66,15 +75,18 @@
     if (!frame || frame.__jungleWatched) return;
     frame.__jungleWatched = true;
     frame.id ||= 'jungle-youtube-' + Math.random().toString(36).slice(2);
+    frame.dataset.youtubeErrored = '0';
+    frame.dataset.youtubeReloading = '0';
     frame.addEventListener('load', () => {
-      // A YouTube anti-bot/error page also fires `load`. Keep the watchdog
-      // armed until the Player API proves that the actual player is ready.
-      frame.dataset.youtubeLoaded = '0';
-      frame.dataset.youtubeReady = '0';
-      frame.dataset.youtubeErrored = '0';
       frame.dataset.youtubeReloading = '0';
-      const attempt = Number(frame.dataset.youtubeAttempt || 0);
-      scheduleRetry(frame, attempt ? retryDelay(attempt) : INITIAL_RETRY_DELAY);
+      // A completed iframe navigation is stable unless the Player API reports
+      // an explicit error. Do not periodically reload a video that is playing.
+      if (frame.dataset.youtubeErrored !== '1') {
+        markHealthy(frame);
+      } else {
+        frame.dataset.youtubeLoaded = '0';
+        frame.dataset.youtubeReady = '0';
+      }
       setTimeout(() => frame.isConnected && requestPlayerEvents(frame), 250);
     });
     scheduleRetry(frame);
@@ -109,14 +121,8 @@
     if (['onReady', 'infoDelivery', 'initialDelivery'].includes(data?.event)) {
       // An errored player can continue emitting delivery messages. They are
       // stale health signals and must not cancel the recovery reload.
-      if (frame.dataset.youtubeErrored === '1' || frame.dataset.youtubeReloading === '1') {
-        return;
-      }
-      frame.dataset.youtubeReady = '1';
-      frame.dataset.youtubeLoaded = '1';
-      frame.dataset.youtubeAttempt = '0';
-      clearRetry(frame);
-      post(frame, { event: 'command', func: 'playVideo', args: [] });
+      if (frame.dataset.youtubeErrored === '1') return;
+      markHealthy(frame);
     }
   });
 

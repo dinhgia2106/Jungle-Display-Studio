@@ -499,13 +499,13 @@ function createControlWindow() {
             && Boolean(youtubeFrame?.__jungleRetryTimer || youtubeFrame?.dataset.youtubeLoaded === '1')
             && new URL(youtubeFrame.src).searchParams.get('enablejsapi') === '1';
           youtubeFrame.dispatchEvent(new Event('load'));
-          const youtubeRetriesUnreadyLoad = youtubeFrame.dataset.youtubeLoaded === '0' && Boolean(youtubeFrame.__jungleRetryTimer);
+          const youtubeStopsRetryAfterLoad = youtubeFrame.dataset.youtubeLoaded === '1' && !youtubeFrame.__jungleRetryTimer;
           window.dispatchEvent(new MessageEvent('message', {
             origin: 'https://www.youtube-nocookie.com',
             source: youtubeFrame.contentWindow,
             data: JSON.stringify({ event: 'onReady' })
           }));
-          const youtubeStopsRetryAfterReady = youtubeFrame.dataset.youtubeLoaded === '1' && !youtubeFrame.__jungleRetryTimer;
+          const youtubeRemainsStableAfterReady = youtubeFrame.dataset.youtubeLoaded === '1' && !youtubeFrame.__jungleRetryTimer;
           document.querySelector('[data-add="video"]').click();
           const sourceInput = document.getElementById('prop-source');
           sourceInput.value = 'data:video/mp4;base64,AAAA';
@@ -614,8 +614,8 @@ function createControlWindow() {
             multiSelected,
             equalHorizontalGaps: Math.abs(firstGap - secondGap) <= 1,
             youtubeWatchdog,
-            youtubeRetriesUnreadyLoad,
-            youtubeStopsRetryAfterReady,
+            youtubeStopsRetryAfterLoad,
+            youtubeRemainsStableAfterReady,
             videoNodePreserved,
             fullCanvasCrop,
             mediaZoomApplied,
@@ -647,8 +647,8 @@ function createControlWindow() {
         if (!control.hardwareOptionsVisible || !control.temperatureToggleShrinks || !control.temperatureToggleRestores) {
           throw new Error('Hardware content visibility controls did not resize the CPU element correctly.');
         }
-        if (!control.youtubeRetriesUnreadyLoad || !control.youtubeStopsRetryAfterReady) {
-          throw new Error('YouTube watchdog did not retry an unready frame or stop after Player API readiness.');
+        if (!control.youtubeStopsRetryAfterLoad || !control.youtubeRemainsStableAfterReady) {
+          throw new Error('YouTube watchdog reloaded a stable player.');
         }
         if (!control.agentWidgetsSeparated || !control.agentQuotaPinned || !display.agentWidgetsSeparated || !display.agentQuotaPinned) {
           throw new Error('Codex/Claude widgets are not separated or quota is not pinned.');
