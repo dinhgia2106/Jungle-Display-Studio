@@ -9,6 +9,12 @@ const { fitPreview } = require('./display-profile');
 const { normalizeWorkspace, activeDisplay } = require('./workspace');
 const { sampleTemperature } = require('./hardware-temperature');
 
+const IS_SMOKE_TEST = process.argv.includes('--smoke-test');
+const smokeTestUserData = IS_SMOKE_TEST
+  ? fs.mkdtempSync(path.join(os.tmpdir(), 'jungle-display-smoke-'))
+  : null;
+if (smokeTestUserData) app.setPath('userData', smokeTestUserData);
+
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const execFileAsync = promisify(execFile);
@@ -204,7 +210,7 @@ function shouldStartHidden(settings = getSettings()) {
 }
 
 async function applyStartupSettings(settings) {
-  if (process.platform !== 'win32' || process.argv.includes('--smoke-test')) return;
+  if (process.platform !== 'win32' || IS_SMOKE_TEST) return;
   app.setLoginItemSettings({ openAtLogin: false });
   await execFileAsync('reg.exe', ['DELETE', WINDOWS_RUN_KEY, '/v', STARTUP_VALUE_NAME, '/f']).catch(() => {});
   if (!settings.startup.launchAtLogin) return;
@@ -247,7 +253,7 @@ function handleDriverState(state) {
     clearReconnectTimer();
   } else if (state.status === 'error' || state.status === 'disconnected') {
     scheduleReconnect();
-    if (!getSettings().startup.autoReconnect && !process.argv.includes('--smoke-test')) releaseStreamWindow();
+    if (!getSettings().startup.autoReconnect && !IS_SMOKE_TEST) releaseStreamWindow();
   }
 }
 
@@ -407,7 +413,7 @@ function createControlWindow() {
     }
   });
   controlWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  if (process.argv.includes('--smoke-test')) {
+  if (IS_SMOKE_TEST) {
     controlWindow.webContents.once('did-finish-load', () => setTimeout(async () => {
       try {
         const control = await controlWindow.webContents.executeJavaScript(`(async () => {
@@ -693,7 +699,7 @@ app.whenReady().then(async () => {
   initializeGpu();
   sampleTemperatures();
   setInterval(sampleTemperatures, 5000);
-  if (process.argv.includes('--smoke-test')) await ensureStreamWindow();
+  if (IS_SMOKE_TEST) await ensureStreamWindow();
   await runStartupActions();
 });
 
@@ -716,4 +722,13 @@ app.on('before-quit', async (event) => {
 
 app.on('window-all-closed', () => {
   // Keep the background renderer, serial connection and tray alive.
+});
+
+app.on('quit', () => {
+  if (!smokeTestUserData) return;
+  try {
+    fs.rmSync(smokeTestUserData, { recursive: true, force: true });
+  } catch {
+    // A failed cleanup only leaves an isolated temporary test profile behind.
+  }
 });
