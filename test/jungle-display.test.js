@@ -6,6 +6,7 @@ const { sanitizeProfile, fitPreview } = require('../src/display-profile');
 const { defaultCanvas, normalizeWorkspace, activeDisplay, sanitizeCanvas } = require('../src/workspace');
 const { parseDateKey, occursOn, listOccurrences, pageItems, marqueeDuration } = require('../src/renderer/calendar');
 const { normalizeTemperature, parseTemperatureOutput, windowsSensorScript } = require('../src/hardware-temperature');
+const { normalizeCodexQuota, normalizeClaudeQuota, normalizeClaudeTasks, inferCodexLifecycle, sortTasks, recentTasks } = require('../src/agent-monitor');
 
 assert.equal(BAUD_RATE, 2_000_000);
 assert.equal(Math.round(1000 / TARGET_FRAME_INTERVAL_MS), 30);
@@ -26,6 +27,25 @@ assert.equal(parseTemperatureOutput('\r\nnot-a-sensor\r\n72.25\r\n'), 72.3);
 assert.match(windowsSensorScript('cpu'), /MSAcpi_ThermalZoneTemperature/);
 assert.match(windowsSensorScript('cpu'), /High Precision Temperature/);
 assert.doesNotMatch(windowsSensorScript('gpu'), /MSAcpi_ThermalZoneTemperature/);
+assert.deepEqual(normalizeCodexQuota({ rateLimits: { planType: 'plus', primary: { usedPercent: 82, resetsAt: 123 }, credits: { balance: '0' } }, rateLimitResetCredits: { availableCount: 1 } }), {
+  plan: 'plus', primary: { usedPercent: 82, resetsAt: 123 }, secondary: null,
+  credits: { hasCredits: false, unlimited: false, balance: '0' }, resetCredits: 1
+});
+assert.deepEqual(normalizeClaudeQuota({ rate_limits: { five_hour: { used_percentage: 23.5, resets_at: 456 }, seven_day: { used_percentage: 41.2, resets_at: 789 } } }), {
+  fiveHour: { usedPercent: 23.5, resetsAt: 456 }, sevenDay: { usedPercent: 41.2, resetsAt: 789 }
+});
+assert.equal(inferCodexLifecycle('{"type":"event_msg","payload":{"type":"task_started"}}', Date.now()), 'running');
+assert.equal(inferCodexLifecycle('{"type":"event_msg","payload":{"type":"task_started"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}'), 'completed');
+assert.equal(normalizeClaudeTasks([{ id: 'one', name: 'Build monitor', status: 'active' }])[0].status, 'running');
+assert.deepEqual(sortTasks([{ status: 'completed', updatedAt: 20 }, { status: 'running', updatedAt: 10 }]).map((task) => task.status), ['running', 'completed']);
+const recentNow = 2 * 24 * 60 * 60 * 1000;
+assert.deepEqual(recentTasks([
+  { id: 'running-old', provider: 'codex', status: 'running', updatedAt: 1 },
+  { id: 'recent', provider: 'codex', status: 'completed', updatedAt: recentNow - 1000 },
+  { id: 'old', provider: 'codex', status: 'completed', updatedAt: recentNow - 25 * 60 * 60 * 1000 },
+  { id: 'claude-recent', provider: 'claude', status: 'completed', updatedAt: recentNow - 2000 }
+], recentNow).map((task) => task.id), ['running-old', 'recent', 'claude-recent']);
+assert.equal(recentTasks(Array.from({ length: 12 }, (_, index) => ({ id: index, provider: 'codex', status: 'completed', updatedAt: recentNow - index })), recentNow).length, 8);
 
 function createYoutubeWatchdogFixture() {
   let nextTimerId = 1;
@@ -211,6 +231,14 @@ assert.equal(splitTypography.elements[0].labelStrokeWidth, 2.5);
 const calendarCanvas = sanitizeCanvas({ elements: [{ id: 'reminders', type: 'calendar', maxItems: 50 }] }, { width: 960, height: 480 });
 assert.equal(calendarCanvas.elements[0].type, 'calendar');
 assert.equal(calendarCanvas.elements[0].maxItems, 20);
+const agentCanvas = sanitizeCanvas({ elements: [{ id: 'codex', type: 'codex', maxItems: 8 }, { id: 'claude', type: 'claude' }] }, { width: 960, height: 480 });
+assert.equal(agentCanvas.elements[0].type, 'codex');
+assert.equal(agentCanvas.elements[0].title, 'CODEX');
+assert.equal(agentCanvas.elements[1].type, 'claude');
+assert.equal(agentCanvas.elements[1].title, 'CLAUDE CODE');
+const migratedAgentCanvas = sanitizeCanvas({ elements: [{ id: 'legacy-agents', type: 'agents', title: 'AI AGENTS' }] }, { width: 960, height: 480 });
+assert.equal(migratedAgentCanvas.elements[0].type, 'codex');
+assert.equal(migratedAgentCanvas.elements[0].title, 'CODEX');
 
 const hardwareCanvas = sanitizeCanvas({
   elements: [{ id: 'cpu-options', type: 'cpu', showUsage: false, showTemperature: true }]

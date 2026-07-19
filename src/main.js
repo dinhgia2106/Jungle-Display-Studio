@@ -8,6 +8,7 @@ const { JungleDisplayDriver } = require('./jungle-display');
 const { fitPreview } = require('./display-profile');
 const { normalizeWorkspace, activeDisplay } = require('./workspace');
 const { sampleTemperature } = require('./hardware-temperature');
+const { AgentMonitor } = require('./agent-monitor');
 
 const IS_SMOKE_TEST = process.argv.includes('--smoke-test');
 const smokeTestUserData = IS_SMOKE_TEST
@@ -29,6 +30,7 @@ let streamWindowReady;
 let previewWindow;
 let tray;
 let driver;
+let agentMonitor;
 let settingsCache;
 let quitting = false;
 let previousCpu = null;
@@ -544,6 +546,53 @@ function createControlWindow() {
           const taskLabel = taskBox.querySelector('.element-label');
           const taskTextStyle = getComputedStyle(taskText);
           const taskLayoutSignature = [taskLabel.offsetLeft, taskLabel.offsetTop, taskText.offsetLeft, taskText.offsetTop, taskText.offsetWidth, taskText.offsetHeight, taskTextStyle.fontSize, taskTextStyle.lineHeight, taskTextStyle.padding].join('|');
+          const hardwareNarrowValuesFit = ['cpu', 'ram', 'gpu'].every((type) => {
+            const box = document.querySelector('.canvas-element.' + type);
+            const original = box.style.width;
+            box.style.width = '48px';
+            const fits = [...box.querySelectorAll('.element-value')].every((value) => value.scrollWidth <= value.clientWidth + 1 && getComputedStyle(value).textOverflow === 'clip');
+            box.style.width = original;
+            return fits;
+          });
+          agentSnapshot = {
+            providers: { codex: { available: true, connected: true }, claude: { available: true, connected: true } },
+            tasks: [...Array.from({ length: 8 }, (_, index) => ({ provider: 'codex', status: index ? 'completed' : 'running', title: 'Codex recent task ' + (index + 1) + ' with a deliberately long title that must fit without moving pages' })), ...Array.from({ length: 8 }, (_, index) => ({ provider: 'claude', status: index ? 'completed' : 'running', title: 'Claude recent task ' + (index + 1) + ' with a deliberately long title that must fit without moving pages' }))]
+          };
+          document.querySelector('[data-add="codex"]').click();
+          document.querySelector('[data-add="claude"]').click();
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const agentBoxes = [...document.querySelectorAll('.canvas-element.codex, .canvas-element.claude')];
+          const agentWidgetsSeparated = agentBoxes.length === 2 && agentBoxes.every((box) => box.querySelector('.agent-quota'));
+          const codexResizeBox = agentBoxes.find((box) => box.classList.contains('codex'));
+          const codexResizeElement = activeDisplay().canvas.elements.find((element) => element.id === codexResizeBox.dataset.elementId);
+          const codexResizeBefore = { width: codexResizeElement.width, height: codexResizeElement.height, fontSize: codexResizeElement.fontSize, labelFontSize: codexResizeElement.labelFontSize, radius: codexResizeElement.radius, textStrokeWidth: codexResizeElement.textStrokeWidth, labelStrokeWidth: codexResizeElement.labelStrokeWidth };
+          codexResizeBox.querySelector('.resize-handle').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 200 }));
+          document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 280, clientY: 200 }));
+          document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+          const agentHorizontalResizeOnly = codexResizeElement.width > codexResizeBefore.width
+            && codexResizeElement.height === codexResizeBefore.height
+            && codexResizeElement.fontSize === codexResizeBefore.fontSize
+            && codexResizeElement.labelFontSize === codexResizeBefore.labelFontSize
+            && codexResizeElement.radius === codexResizeBefore.radius
+            && codexResizeElement.textStrokeWidth === codexResizeBefore.textStrokeWidth
+            && codexResizeElement.labelStrokeWidth === codexResizeBefore.labelStrokeWidth;
+          const agentQuotaPinned = agentBoxes.every((box) => {
+            const quota = box.querySelector('.agent-quota');
+            return quota?.nextElementSibling?.matches('ol') && getComputedStyle(quota).flexShrink === '0';
+          });
+          const codexListText = document.querySelector('.canvas-element.codex .list-text');
+          codexListText?.classList.add('is-overflowing');
+          const codexMarqueeDisabled = Boolean(codexListText) && getComputedStyle(codexListText).animationName === 'none';
+          const agentTasksStatic = agentBoxes.every((box) => box.querySelectorAll('.agent-row').length === 8 && (!box.dataset.nextListAt || box.dataset.nextListAt === '0'));
+          const agentVisibleBefore = agentBoxes.map((box) => box.querySelectorAll('.agent-row:not([hidden])').length);
+          const agentFontBefore = agentBoxes.map((box) => getComputedStyle(box.querySelector('.agent-row .list-text')).fontSize);
+          const agentHeights = agentBoxes.map((box) => box.style.height);
+          agentBoxes.forEach((box) => { box.style.height = '120px'; scheduleAgentTaskLayout(box); });
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const agentVisibleAfter = agentBoxes.map((box) => box.querySelectorAll('.agent-row:not([hidden])').length);
+          const agentFontAfter = agentBoxes.map((box) => getComputedStyle(box.querySelector('.agent-row .list-text')).fontSize);
+          const agentTasksResponsive = agentBoxes.every((_, index) => agentVisibleAfter[index] < agentVisibleBefore[index] && agentFontAfter[index] === agentFontBefore[index]);
+          agentBoxes.forEach((box, index) => { box.style.height = agentHeights[index]; scheduleAgentTaskLayout(box); });
           return {
             title: document.title,
             deviceCards: document.querySelectorAll('.device-card').length,
@@ -574,14 +623,25 @@ function createControlWindow() {
             elementLabelScale,
             standardLabelScale,
             taskListRestored,
-            taskLayoutSignature
+            taskLayoutSignature,
+            agentWidgetsSeparated,
+            agentHorizontalResizeOnly,
+            agentQuotaPinned,
+            codexMarqueeDisabled,
+            hardwareNarrowValuesFit,
+            agentTasksStatic,
+            agentTasksResponsive
           };
         })()`);
         await new Promise((resolve) => setTimeout(resolve, 1500));
+        await streamWindow.webContents.executeJavaScript("agentSnapshot = { providers: { codex: { available: true, connected: true }, claude: { available: true, connected: true } }, tasks: [...Array.from({ length: 8 }, (_, index) => ({ provider: 'codex', status: index ? 'completed' : 'running', title: 'Codex recent task ' + (index + 1) + ' with a deliberately long title that must fit without moving pages' })), ...Array.from({ length: 8 }, (_, index) => ({ provider: 'claude', status: index ? 'completed' : 'running', title: 'Claude recent task ' + (index + 1) + ' with a deliberately long title that must fit without moving pages' }))] }; renderLayout();");
+        await new Promise((resolve) => setTimeout(resolve, 100));
         const streamVideoReady = await streamWindow.webContents.executeJavaScript("window.__smokeVideoNode = document.querySelector('.widget.video video'); Boolean(window.__smokeVideoNode)");
         await controlWindow.webContents.executeJavaScript("(() => { const input = document.getElementById('prop-opacity'); input.value = 99; input.dispatchEvent(new Event('input', { bubbles: true })); })()");
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, youtubeWatchdog: (() => { const frame = document.querySelector('.widget.youtube iframe'); return Boolean(frame?.__jungleWatched) && Boolean(frame?.__jungleRetryTimer || frame?.dataset.youtubeLoaded === '1') && new URL(frame.src).searchParams.get('enablejsapi') === '1'; })(), videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '' })");
+        const display = await streamWindow.webContents.executeJavaScript("({ widgets: document.querySelectorAll('.widget').length, gpuWidgets: document.querySelectorAll('.widget.gpu').length, youtubeWatchdog: (() => { const frame = document.querySelector('.widget.youtube iframe'); return Boolean(frame?.__jungleWatched) && Boolean(frame?.__jungleRetryTimer || frame?.dataset.youtubeLoaded === '1') && new URL(frame.src).searchParams.get('enablejsapi') === '1'; })(), videoReady: " + streamVideoReady + ", videoNodePreserved: window.__smokeVideoNode === document.querySelector('.widget.video video'), fullCanvasCrop: parseFloat(document.querySelector('.widget.video').style.left) === 0 && parseFloat(document.querySelector('.widget.video').style.top) === 0 && parseFloat(document.querySelector('.widget.video').style.width) === 960 && parseFloat(document.querySelector('.widget.video').style.height) === 480 && document.querySelector('.widget.video video').style.objectFit === 'cover', mediaZoomApplied: document.querySelector('.widget.video video').style.transform === 'scale(2.5)', taskTextScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.tasks li')).fontSize) / parseFloat(document.querySelector('.widget.tasks').style.fontSize) * 100) / 100, elementLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.uptime .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.uptime').style.fontSize) * 100) / 100, standardLabelScale: Math.round(parseFloat(getComputedStyle(document.querySelector('.widget.gpu .widget-label')).fontSize) / parseFloat(document.querySelector('.widget.gpu').style.fontSize) * 100) / 100, crossStylePaste: document.querySelector('.widget.ram .widget-label').style.color === document.querySelector('.widget.cpu').style.color && document.querySelector('.widget.ram .widget-label').style.fontSize === document.querySelector('.widget.cpu').style.fontSize && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeColor === document.querySelector('.widget.cpu').style.webkitTextStrokeColor && document.querySelector('.widget.ram .widget-label').style.webkitTextStrokeWidth === document.querySelector('.widget.cpu').style.webkitTextStrokeWidth, independentLabelStyle: document.querySelector('.widget.cpu .widget-label').style.fontSize === '21px' && document.querySelector('.widget.cpu .widget-label').style.webkitTextStrokeWidth === '2px' && document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu .widget-label').style.color !== document.querySelector('.widget.cpu').style.color, taskListRestored: getComputedStyle(document.querySelector('.widget.tasks ol')).flexGrow === '0' && getComputedStyle(document.querySelector('.widget.tasks li'), '::before').content === 'none', taskLayoutSignature: (() => { const box = document.querySelector('.widget.tasks'); const label = box.querySelector('.widget-label'); const item = box.querySelector('li'); const style = getComputedStyle(item); return [label.offsetLeft, label.offsetTop, item.offsetLeft, item.offsetTop, item.offsetWidth, item.offsetHeight, style.fontSize, style.lineHeight, style.padding].join('|'); })(), textOutlineApplied: document.querySelector('.widget.cpu').style.webkitTextStrokeWidth === '3px' && document.querySelector('.widget.cpu').style.webkitTextStrokeColor !== '', agentWidgetsSeparated: document.querySelectorAll('.widget.codex').length === 1 && document.querySelectorAll('.widget.claude').length === 1, agentQuotaPinned: [...document.querySelectorAll('.widget.codex, .widget.claude')].every((box) => { const quota = box.querySelector('.agent-quota'); return quota?.nextElementSibling?.matches('ol') && getComputedStyle(quota).flexShrink === '0'; }) })");
+        const displayHardwareNarrowValuesFit = await streamWindow.webContents.executeJavaScript("['cpu', 'ram', 'gpu'].every((type) => { const box = document.querySelector('.widget.' + type); const original = box.style.width; box.style.width = '48px'; const fits = [...box.querySelectorAll('.widget-value')].every((value) => value.scrollWidth <= value.clientWidth + 1 && getComputedStyle(value).textOverflow === 'clip'); box.style.width = original; return fits; })");
+        const displayAgentTasksResponsive = await streamWindow.webContents.executeJavaScript("(async () => { const boxes = [...document.querySelectorAll('.widget.codex, .widget.claude')]; const before = boxes.map((box) => box.querySelectorAll('.agent-row:not([hidden])').length); const fonts = boxes.map((box) => getComputedStyle(box.querySelector('.agent-row .list-text')).fontSize); const heights = boxes.map((box) => box.style.height); boxes.forEach((box) => { box.style.height = '120px'; scheduleAgentTaskLayout(box); }); await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))); const after = boxes.map((box) => box.querySelectorAll('.agent-row:not([hidden])').length); const result = boxes.every((box, index) => box.querySelectorAll('.agent-row').length === 8 && (!box.dataset.nextListAt || box.dataset.nextListAt === '0') && after[index] < before[index] && getComputedStyle(box.querySelector('.agent-row .list-text')).fontSize === fonts[index]); boxes.forEach((box, index) => { box.style.height = heights[index]; scheduleAgentTaskLayout(box); }); return result; })()");
         const taskLayoutParity = control.taskLayoutSignature === display.taskLayoutSignature;
         if (!taskLayoutParity) throw new Error('Editor/output task layout mismatch: ' + control.taskLayoutSignature + ' !== ' + display.taskLayoutSignature);
         if (!control.hardwareOptionsVisible || !control.temperatureToggleShrinks || !control.temperatureToggleRestores) {
@@ -590,6 +650,13 @@ function createControlWindow() {
         if (!control.youtubeRetriesUnreadyLoad || !control.youtubeStopsRetryAfterReady) {
           throw new Error('YouTube watchdog did not retry an unready frame or stop after Player API readiness.');
         }
+        if (!control.agentWidgetsSeparated || !control.agentQuotaPinned || !display.agentWidgetsSeparated || !display.agentQuotaPinned) {
+          throw new Error('Codex/Claude widgets are not separated or quota is not pinned.');
+        }
+        if (!control.agentHorizontalResizeOnly) throw new Error('Horizontal agent resize still scales typography or height.');
+        if (!control.codexMarqueeDisabled) throw new Error('Codex task text marquee is still enabled.');
+        if (!control.hardwareNarrowValuesFit || !displayHardwareNarrowValuesFit) throw new Error('CPU/RAM/GPU values still truncate in a narrow box.');
+        if (!control.agentTasksStatic || !control.agentTasksResponsive || !displayAgentTasksResponsive) throw new Error('Agent task count does not respond to height while preserving font size.');
         controlWindow.close();
         await new Promise((resolve) => setTimeout(resolve, 100));
         const backgroundAfterClose = !controlWindow.isDestroyed() && !controlWindow.isVisible() && Boolean(tray && !tray.isDestroyed());
@@ -645,6 +712,9 @@ function registerIpc() {
   });
 
   ipcMain.handle('system:get', () => systemStats());
+  ipcMain.handle('agents:get', () => agentMonitor?.snapshot);
+  ipcMain.handle('agents:refresh', () => agentMonitor?.refresh());
+  ipcMain.handle('agents:configure-claude', () => agentMonitor?.configureClaudeBridge());
   ipcMain.handle('media:pick', async (_, kind) => {
     const filters = kind === 'image'
       ? [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
@@ -691,6 +761,11 @@ app.whenReady().then(async () => {
     }
   );
   driver = new JungleDisplayDriver({ captureFrame, onState: handleDriverState });
+  agentMonitor = new AgentMonitor({
+    userDataPath: app.getPath('userData'),
+    disabled: IS_SMOKE_TEST,
+    onUpdate: (snapshot) => broadcast('agents:updated', snapshot)
+  });
   registerIpc();
   createControlWindow();
   createTray();
@@ -701,6 +776,7 @@ app.whenReady().then(async () => {
   initializeGpu();
   sampleTemperatures();
   setInterval(sampleTemperatures, 5000);
+  agentMonitor.start().catch(() => {});
   if (IS_SMOKE_TEST) await ensureStreamWindow();
   await runStartupActions();
 });
@@ -714,6 +790,7 @@ app.on('before-quit', async (event) => {
   event.preventDefault();
   quitting = true;
   clearReconnectTimer();
+  agentMonitor?.stop();
   try {
     await driver?.disconnect();
   } catch {

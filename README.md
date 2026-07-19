@@ -13,6 +13,7 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - Shift-click multi-selection with edge/center alignment and equal horizontal or vertical gaps.
 - Context-aware properties show only the controls supported by the selected element.
 - Clock, date, text, CPU (load and temperature), RAM, GPU (load and temperature), uptime, tasks, calendar reminders, shape, image, local video and YouTube elements. CPU/GPU elements can independently show or hide usage and temperature, and resize vertically as content rows change.
+- Separate read-only Codex and Claude Code elements for quota, running work and recently completed tasks. Each provider keeps up to eight tasks active or updated in the last 24 hours. Quota and task rows stay pinned on one page; task text keeps its configured size, horizontal resizing only adds title width, and vertical resizing changes how many rows are visible. Local session watchers and Codex app-server notifications push state changes immediately, with a ten-second polling fallback. Codex connects through its local app-server; Claude background tasks use its CLI and subscription quota can be enabled from Settings through a local status-line bridge.
 - Local calendar with Today, Upcoming and All Events views; events can be edited or deleted, with optional times and daily, weekly, monthly or yearly recurrence. Annual events only require a day and month.
 - Task and calendar widgets scroll overflowing row text horizontally, wait 3.5 seconds after the longest row finishes, then rotate through additional pages when the list exceeds the configured visible row count.
 - Video and YouTube are resizable canvas elements instead of forced full-screen modes.
@@ -75,6 +76,8 @@ Unsigned installers can trigger Microsoft Defender SmartScreen. Code signing is 
 ## Privacy
 
 No telemetry, analytics or remote settings service is included. YouTube elements load YouTube embeds and therefore require Internet access and follow YouTube policies.
+
+The AI agent monitor uses each locally installed CLI and its existing authentication. Jungle Display Studio does not read or store Codex or Claude credential files. Enabling the Claude quota bridge creates a backup of the existing Claude settings file and refuses to replace a custom status line.
 
 ## Contributing
 

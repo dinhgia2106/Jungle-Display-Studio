@@ -1,5 +1,6 @@
 let settings;
 let stats;
+let agentSnapshot;
 let timer;
 let listTimer;
 let lastCalendarDate;
@@ -64,6 +65,44 @@ function taskMarkup(element, page = 0) {
   return visible.map((task) => '<li><span class="list-text-viewport"><span class="list-text">' + escapeHtml(task.title) + '</span></span></li>').join('');
 }
 
+function agentProviderKey(element) {
+  return element.type === 'claude' ? 'claude' : 'codex';
+}
+
+function agentQuota(element) {
+  const key = agentProviderKey(element);
+  const provider = agentSnapshot?.providers?.[key];
+  const values = [];
+  if (key === 'codex') {
+    if (provider?.quota?.primary?.usedPercent != null) values.push({ label: '5H', value: Math.round(provider.quota.primary.usedPercent) + '%' });
+    if (provider?.quota?.secondary?.usedPercent != null) values.push({ label: '7D', value: Math.round(provider.quota.secondary.usedPercent) + '%' });
+  } else {
+    if (provider?.quota?.fiveHour?.usedPercent != null) values.push({ label: '5H', value: Math.round(provider.quota.fiveHour.usedPercent) + '%' });
+    if (provider?.quota?.sevenDay?.usedPercent != null) values.push({ label: '7D', value: Math.round(provider.quota.sevenDay.usedPercent) + '%' });
+  }
+  return { status: provider?.connected ? 'connected' : 'offline', values, text: provider?.available ? 'NO QUOTA' : 'OFFLINE' };
+}
+
+function agentRows(element) {
+  const key = agentProviderKey(element);
+  return (agentSnapshot?.tasks || []).filter((task) => task.provider === key).map((task) => ({ status: task.status, text: (task.status === 'running' ? '\u25cf' : task.status === 'completed' ? '\u2713' : '\u25cb') + ' ' + task.title }));
+}
+
+function agentQuotaMarkup(element) {
+  const quota = agentQuota(element);
+  const content = quota.values.length
+    ? quota.values.map((item) => '<span><small>' + escapeHtml(item.label) + '</small><b>' + escapeHtml(item.value) + '</b></span>').join('')
+    : '<strong>' + escapeHtml(quota.text) + '</strong>';
+  return '<div class="agent-quota ' + escapeHtml(quota.status) + '">' + content + '</div>';
+}
+
+function agentMarkup(element, page = 0) {
+  const visible = agentRows(element).slice(0, 8);
+  return visible.length
+    ? visible.map((item) => '<li class="agent-row ' + escapeHtml(item.status) + '"><span class="list-text-viewport"><span class="list-text">' + escapeHtml(item.text) + '</span></span></li>').join('')
+    : '<li class="agent-row empty"><span class="list-text-viewport"><span class="list-text">NO TASKS</span></span></li>';
+}
+
 function calendarText(key) {
   const english = { noEvents: 'No events', todayShort: 'Today', tomorrow: 'Tomorrow' };
   return settings.language === 'vi' ? window.JUNGLE_I18N.dynamicVi[key] : english[key];
@@ -95,6 +134,7 @@ function contentMarkup(element, page = 0) {
   if (element.type === 'shape') return '';
   if (element.type === 'tasks') return '<div class="widget-inner task-widget">' + title + '<ol>' + taskMarkup(element, page) + '</ol></div>';
   if (element.type === 'calendar') return '<div class="widget-inner calendar-widget">' + title + '<ol>' + calendarMarkup(element, page) + '</ol></div>';
+  if (['codex', 'claude'].includes(element.type)) return '<div class="widget-inner agent-widget">' + title + agentQuotaMarkup(element) + '<ol>' + agentMarkup(element, page) + '</ol></div>';
   if (element.type === 'text') return '<div class="widget-inner">' + title + '<b class="widget-value multiline">' + escapeHtml(element.text) + '</b></div>';
   if (element.type === 'clock') return '<div class="widget-inner">' + title + '<b class="widget-value" data-dynamic="clock">' + nowInfo().time + '</b></div>';
   if (element.type === 'date') return '<div class="widget-inner">' + title + '<b class="widget-value multiline" data-dynamic="date">' + escapeHtml(nowInfo().date) + '</b></div>';
@@ -110,11 +150,12 @@ function contentSignature(element) {
   const signature = [element.type, element.title, element.text, element.source, element.maxItems, element.showUsage, element.showTemperature];
   if (element.type === 'tasks') signature.push(settings.todos);
   if (element.type === 'calendar') signature.push(settings.events, window.JUNGLE_CALENDAR.dateKey(new Date()), settings.language);
+  if (['codex', 'claude'].includes(element.type)) signature.push(agentSnapshot, settings.language);
   return JSON.stringify(signature);
 }
 
 function resolvedLabelStyle(element) {
-  const scale = ['tasks', 'calendar', 'uptime'].includes(element.type) ? 1.52 : 0.38;
+  const scale = ['tasks', 'calendar', 'codex', 'claude', 'uptime'].includes(element.type) ? 1.52 : 0.38;
   return {
     color: element.labelColor || element.color,
     fontSize: Number.isFinite(Number(element.labelFontSize)) ? Number(element.labelFontSize) : element.fontSize * scale,
@@ -166,12 +207,42 @@ function styleWidget(node, element, refreshContent = true) {
   }
   if (refreshContent) node.querySelector('video')?.play().catch(() => {});
   if (['tasks', 'calendar'].includes(element.type)) scheduleWidgetListMotion(node, element);
+  if (['codex', 'claude'].includes(element.type)) scheduleAgentTaskLayout(node);
 }
 
 function rotatingItemCount(element) {
   if (element.type === 'tasks') return settings.todos.filter((task) => !task.done).length;
   if (element.type === 'calendar') return window.JUNGLE_CALENDAR.listOccurrences(settings.events || [], new Date(), 90, 200).length;
   return 0;
+}
+
+function scheduleAgentTaskLayout(node) {
+  const version = String((Number(node.dataset.agentLayoutVersion) || 0) + 1);
+  node.dataset.agentLayoutVersion = version;
+  requestAnimationFrame(() => {
+    if (node.isConnected && node.dataset.agentLayoutVersion === version) layoutAgentTaskRows(node);
+  });
+}
+
+function layoutAgentTaskRows(node) {
+  const list = node.querySelector('.agent-widget ol');
+  const rows = [...(list?.children || [])];
+  if (!list || !rows.length) return;
+  rows.forEach((row) => {
+    row.hidden = false;
+    row.querySelector('.list-text')?.removeAttribute('style');
+  });
+  list.style.removeProperty('grid-template-rows');
+  const rowStyle = getComputedStyle(rows[0]);
+  const font = parseFloat(rowStyle.fontSize) || 12;
+  const line = parseFloat(rowStyle.lineHeight) || font * 1.15;
+  const padding = (parseFloat(rowStyle.paddingTop) || 0) + (parseFloat(rowStyle.paddingBottom) || 0);
+  const minimum = Math.ceil(line + padding + 2);
+  const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+  const capacity = Math.max(1, Math.min(rows.length, Math.floor((list.clientHeight + gap) / (minimum + gap)) || 1));
+  rows.forEach((row, index) => { row.hidden = index >= capacity; });
+  list.style.gridTemplateRows = 'repeat(' + capacity + ', minmax(' + minimum + 'px, 1fr))';
+  list.dataset.visibleRows = String(capacity);
 }
 
 function scheduleWidgetListMotion(node, element) {
@@ -184,11 +255,12 @@ function scheduleWidgetListMotion(node, element) {
 
 function prepareWidgetListMotion(node, element) {
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const allowMarquee = element.type !== 'codex';
   const longest = [...node.querySelectorAll('.list-text')].reduce((maximum, target) => {
     target.classList.remove('is-overflowing');
     target.style.removeProperty('--marquee-distance');
     target.style.removeProperty('--marquee-duration');
-    if (reduced) return maximum;
+    if (reduced || !allowMarquee) return maximum;
     const distance = Math.max(0, target.scrollWidth - target.clientWidth);
     if (distance < 2) return maximum;
     const duration = window.JUNGLE_CALENDAR.marqueeDuration(distance);
@@ -267,8 +339,7 @@ async function updateDynamic() {
 }
 
 async function start() {
-  settings = await window.jungle.getSettings();
-  stats = await window.jungle.getSystem();
+  [settings, stats, agentSnapshot] = await Promise.all([window.jungle.getSettings(), window.jungle.getSystem(), window.jungle.getAgents()]);
   renderLayout();
   lastCalendarDate = window.JUNGLE_CALENDAR.dateKey(new Date());
   clearInterval(timer);
@@ -277,6 +348,10 @@ async function start() {
   listTimer = setInterval(advanceWidgetLists, 200);
   window.jungle.onSettings((next) => {
     settings = next;
+    renderLayout();
+  });
+  window.jungle.onAgents((next) => {
+    agentSnapshot = next;
     renderLayout();
   });
 }

@@ -66,6 +66,8 @@
             <button data-add="uptime"><b>UP</b><span>Uptime</span></button>
             <button data-add="tasks"><b>✓</b><span data-i18n="element.tasks">Tasks</span></button>
             <button data-add="calendar"><b>CAL</b><span data-i18n="element.calendar">Calendar</span></button>
+            <button data-add="codex"><b>CX</b><span data-i18n="element.codex">Codex</span></button>
+            <button data-add="claude"><b>CL</b><span data-i18n="element.claude">Claude Code</span></button>
             <button data-add="video"><b>▶</b><span data-i18n="element.video">Video</span></button>
             <button data-add="youtube"><b>YT</b><span>YouTube</span></button>
             <button data-add="image"><b>▧</b><span data-i18n="element.image">Image</span></button>
@@ -235,6 +237,12 @@
         <label><span data-i18n="settings.delay">Reconnect delay (seconds)</span><input id="reconnect-delay" type="number" min="2" max="60" /></label>
         <label class="setting-toggle"><input id="open-preview" type="checkbox" /><span><b data-i18n="settings.preview">Open preview on launch</b><small data-i18n="settings.previewHelp">Show the active canvas when the app starts.</small></span></label>
         <button class="primary wide" id="save-settings" data-i18n="action.saveSettings">Save settings</button>
+      </article>
+      <article class="form-card agent-monitor-settings">
+        <header><div><p class="eyebrow">AGENT MONITOR</p><h3 data-i18n="agents.title">AI agent monitor</h3><p data-i18n="agents.help">Codex connects automatically. Enable the bridge to send Claude Code quota data to the display.</p></div><strong id="agent-task-count">0</strong></header>
+        <div class="agent-provider"><b>CODEX</b><span id="codex-agent-status">--</span></div>
+        <div class="agent-provider"><b>CLAUDE CODE</b><span id="claude-agent-status">--</span></div>
+        <div class="heading-actions"><button class="ghost" id="refresh-agents" data-i18n="agents.refresh">Refresh</button><button class="primary" id="configure-claude" data-i18n="agents.enableClaude">Enable Claude quota bridge</button></div>
       </article>
     </section>
   </main>

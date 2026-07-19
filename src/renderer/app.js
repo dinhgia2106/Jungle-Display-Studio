@@ -1,4 +1,4 @@
-let settings, stats, deviceState;
+let settings, stats, deviceState, agentSnapshot;
 let scannedDevices = [], selectedElementId = null, selectedElementIds = new Set(), dragState = null, typographyClipboard = null, canvasScale = 1, saveTimer, toastTimer, saveRevision = 0, lastCalendarDate, editingEventId = null;
 let editorMediaEnabledState = null;
 const $ = (id) => document.getElementById(id);
@@ -10,11 +10,17 @@ const VI_LOCAL = {
   "property.hardwareContent":"N\u1ed8I DUNG PH\u1ea6N C\u1ee8NG",
   "property.showUsage":"Hi\u1ec3n th\u1ecb % s\u1eed d\u1ee5ng",
   "property.showTemperature":"Hi\u1ec3n th\u1ecb nhi\u1ec7t \u0111\u1ed9",
-  "property.temperatureHelp":"Nhi\u1ec7t \u0111\u1ed9 CPU c\u1ea7n c\u1ea3m bi\u1ebfn do Windows ho\u1eb7c LibreHardwareMonitor cung c\u1ea5p."
+  "property.temperatureHelp":"Nhi\u1ec7t \u0111\u1ed9 CPU c\u1ea7n c\u1ea3m bi\u1ebfn do Windows ho\u1eb7c LibreHardwareMonitor cung c\u1ea5p.",
+  "element.codex":"Codex",
+  "element.claude":"Claude Code",
+  "agents.title":"Theo d\u00f5i AI agents",
+  "agents.help":"Codex t\u1ef1 k\u1ebft n\u1ed1i. B\u1eadt bridge \u0111\u1ec3 Claude Code g\u1eedi quota v\u00e0o m\u00e0n h\u00ecnh.",
+  "agents.refresh":"L\u00e0m m\u1edbi",
+  "agents.enableClaude":"B\u1eadt bridge quota Claude"
 };
 const DYNAMIC = {
-  en:{select:"Select",selected:"Selected",connect:"Connect",disconnect:"Disconnect",online:"ONLINE",offline:"OFFLINE",disconnected:"Disconnected",connecting:"Connecting",streaming:"Streaming",error:"Connection error",remaining:"{count} remaining",done:"All tasks completed",source:"Choose a source",saved:"Saved",saving:"Saving.",scanned:"Display scan complete",reset:"Restored defaults",multiSelected:"{count} selected",styleCopied:"Style copied",stylePasted:"Style pasted",noEvents:"No events",eventCount:"{count} events",allDay:"All day",todayShort:"Today",tomorrow:"Tomorrow",repeatDaily:"Daily",repeatWeekly:"Weekly",repeatMonthly:"Monthly",repeatYearly:"Yearly",deleteSeries:"Delete event / repeating series",editEvent:"Edit",deleteEvent:"Delete",addReminder:"Add reminder",updateReminder:"Save changes",cancel:"Cancel",annualOn:"Every year on {date}",startsOn:"Starts {date}",repeatsUntil:"until {date}"},
-  vi: window.JUNGLE_I18N.dynamicVi
+  en:{select:"Select",selected:"Selected",connect:"Connect",disconnect:"Disconnect",online:"ONLINE",offline:"OFFLINE",disconnected:"Disconnected",connecting:"Connecting",streaming:"Streaming",error:"Connection error",remaining:"{count} remaining",done:"All tasks completed",source:"Choose a source",saved:"Saved",saving:"Saving.",scanned:"Display scan complete",reset:"Restored defaults",multiSelected:"{count} selected",styleCopied:"Style copied",stylePasted:"Style pasted",noEvents:"No events",eventCount:"{count} events",allDay:"All day",todayShort:"Today",tomorrow:"Tomorrow",repeatDaily:"Daily",repeatWeekly:"Weekly",repeatMonthly:"Monthly",repeatYearly:"Yearly",deleteSeries:"Delete event / repeating series",editEvent:"Edit",deleteEvent:"Delete",addReminder:"Add reminder",updateReminder:"Save changes",cancel:"Cancel",annualOn:"Every year on {date}",startsOn:"Starts {date}",repeatsUntil:"until {date}",claudeBridgeEnabled:"Claude quota bridge enabled",existingStatusLine:"Claude already has a custom status line",agentRefreshFailed:"Agent refresh failed"},
+  vi: {...window.JUNGLE_I18N.dynamicVi,claudeBridgeEnabled:"\u0110\u00e3 b\u1eadt bridge quota Claude",existingStatusLine:"Claude \u0111ang c\u00f3 status line t\u00f9y ch\u1ec9nh",agentRefreshFailed:"Kh\u00f4ng th\u1ec3 l\u00e0m m\u1edbi agents"}
 };
 function tr(key, values = {}) {
   let value = (DYNAMIC[settings?.language === "vi" ? "vi" : "en"][key] || key);
@@ -70,6 +76,34 @@ function taskHtml(element, page = 0) {
   const tasks = settings.todos.filter((task) => !task.done),visible=window.JUNGLE_CALENDAR.pageItems(tasks,element.maxItems||4,page).items;
   return visible.length ? visible.map((task) => '<li><span class="list-text-viewport"><span class="list-text">' + esc(task.title) + "</span></span></li>").join("") : '<li><span class="list-text-viewport"><span class="list-text">' + esc(tr("done")) + "</span></span></li>";
 }
+function resetTime(epoch) {
+  if (!Number.isFinite(Number(epoch))) return "--";
+  return new Intl.DateTimeFormat(settings.language === "vi" ? "vi-VN" : "en-GB", {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(Number(epoch) * 1000));
+}
+function agentProviderKey(element) { return element.type==="claude"?"claude":"codex"; }
+function agentQuota(element) {
+  const key=agentProviderKey(element),provider=agentSnapshot?.providers?.[key],values=[];
+  if(key==="codex"){
+    if(provider?.quota?.primary?.usedPercent!=null)values.push({label:"5H",value:Math.round(provider.quota.primary.usedPercent)+"%"});
+    if(provider?.quota?.secondary?.usedPercent!=null)values.push({label:"7D",value:Math.round(provider.quota.secondary.usedPercent)+"%"});
+  }else{
+    if(provider?.quota?.fiveHour?.usedPercent!=null)values.push({label:"5H",value:Math.round(provider.quota.fiveHour.usedPercent)+"%"});
+    if(provider?.quota?.sevenDay?.usedPercent!=null)values.push({label:"7D",value:Math.round(provider.quota.sevenDay.usedPercent)+"%"});
+  }
+  return {status:provider?.connected?"connected":"offline",values,text:provider?.available?"NO QUOTA":"OFFLINE"};
+}
+function agentRows(element) {
+  const key=agentProviderKey(element);
+  return (agentSnapshot?.tasks||[]).filter((task)=>task.provider===key).map((task)=>({status:task.status,text:(task.status==="running"?"\u25cf":task.status==="completed"?"\u2713":"\u25cb")+" "+task.title}));
+}
+function agentQuotaHtml(element) {
+  const quota=agentQuota(element),content=quota.values.length?quota.values.map((item)=>'<span><small>'+esc(item.label)+'</small><b>'+esc(item.value)+'</b></span>').join(""):'<strong>'+esc(quota.text)+'</strong>';
+  return '<div class="agent-quota '+esc(quota.status)+'">'+content+'</div>';
+}
+function agentHtml(element,page=0) {
+  const items=agentRows(element).slice(0,8);
+  return items.length?items.map((item)=>'<li class="agent-row '+esc(item.status)+'"><span class="list-text-viewport"><span class="list-text">'+esc(item.text)+'</span></span></li>').join(""):'<li class="agent-row empty"><span class="list-text-viewport"><span class="list-text">NO TASKS</span></span></li>';
+}
 function calendarOccurrences(days = 90, limit = 200) {
   return window.JUNGLE_CALENDAR.listOccurrences(settings.events || [], new Date(), days, limit);
 }
@@ -118,6 +152,7 @@ function elementHtml(element, page = 0) {
   if (element.type === "shape") return '<div class="element-content"></div>';
   if (element.type === "tasks") return '<div class="element-content element-tasks">' + label + "<ol>" + taskHtml(element,page) + "</ol></div>";
   if (element.type === "calendar") return '<div class="element-content element-calendar">' + label + "<ol>" + calendarHtml(element,page) + "</ol></div>";
+  if (["codex","claude"].includes(element.type)) return '<div class="element-content element-agent">' + label + agentQuotaHtml(element) + "<ol>" + agentHtml(element,page) + "</ol></div>";
   if (element.type === "text") return '<div class="element-content">' + label + '<b class="element-value element-date">' + esc(element.text) + "</b></div>";
   if (element.type === "clock") return '<div class="element-content">' + label + '<b class="element-value" data-dynamic="clock">' + nowInfo().time + "</b></div>";
   if (element.type === "date") return '<div class="element-content">' + label + '<b class="element-value element-date" data-dynamic="date">' + esc(nowInfo().date) + "</b></div>";
@@ -155,10 +190,10 @@ function scaleCanvas() {
   wrap.style.width = Math.round(display.profile.width * canvasScale) + "px"; wrap.style.height = Math.round(display.profile.height * canvasScale) + "px";
 }
 function contentSignature(element) {
-  const signature=[element.type,element.title,element.text,element.source,element.maxItems,element.showUsage,element.showTemperature];if(element.type==="tasks")signature.push(settings.todos);if(element.type==="calendar")signature.push(settings.events,window.JUNGLE_CALENDAR.dateKey(new Date()),settings.language);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
+  const signature=[element.type,element.title,element.text,element.source,element.maxItems,element.showUsage,element.showTemperature];if(element.type==="tasks")signature.push(settings.todos);if(element.type==="calendar")signature.push(settings.events,window.JUNGLE_CALENDAR.dateKey(new Date()),settings.language);if(["codex","claude"].includes(element.type))signature.push(agentSnapshot,settings.language);if(["video","youtube","image"].includes(element.type)&&!element.source)signature.push(settings.language);return JSON.stringify(signature);
 }
 function resolvedLabelStyle(element) {
-  const scale = ["tasks","calendar","uptime"].includes(element.type) ? 1.52 : .38;
+  const scale = ["tasks","calendar","codex","claude","uptime"].includes(element.type) ? 1.52 : .38;
   return {
     color: element.labelColor || element.color,
     fontSize: Number.isFinite(Number(element.labelFontSize)) ? Number(element.labelFontSize) : element.fontSize * scale,
@@ -205,6 +240,7 @@ function styleElement(node, element, refreshContent = true) {
   if(element.type==="youtube")window.JUNGLE_YOUTUBE.watch(node);
   if (refreshContent) node.querySelector("video")?.play().catch(()=>{});
   if(["tasks","calendar"].includes(element.type))scheduleWidgetListMotion(node,element);
+  if(["codex","claude"].includes(element.type))scheduleAgentTaskLayout(node);
 }
 function createElementNode(element) {
   const node=document.createElement("div");node.className="canvas-element "+element.type+(selectedElementIds.has(element.id)?" selected":"");node.dataset.elementId=element.id;node.dataset.type=element.type;styleElement(node,element);return node;
@@ -217,11 +253,17 @@ function rotatingItemCount(element) {
   if(element.type==="calendar")return calendarOccurrences(90,200).length;
   return 0;
 }
+function scheduleAgentTaskLayout(node) {
+  const version=String((Number(node.dataset.agentLayoutVersion)||0)+1);node.dataset.agentLayoutVersion=version;requestAnimationFrame(()=>{if(node.isConnected&&node.dataset.agentLayoutVersion===version)layoutAgentTaskRows(node);});
+}
+function layoutAgentTaskRows(node) {
+  const list=node.querySelector(".element-agent ol"),rows=[...(list?.children||[])];if(!list||!rows.length)return;rows.forEach((row)=>{row.hidden=false;row.querySelector(".list-text")?.removeAttribute("style");});list.style.removeProperty("grid-template-rows");const rowStyle=getComputedStyle(rows[0]),font=parseFloat(rowStyle.fontSize)||12,line=parseFloat(rowStyle.lineHeight)||font*1.15,padding=(parseFloat(rowStyle.paddingTop)||0)+(parseFloat(rowStyle.paddingBottom)||0),minimum=Math.ceil(line+padding+2),gap=parseFloat(getComputedStyle(list).rowGap)||0,capacity=Math.max(1,Math.min(rows.length,Math.floor((list.clientHeight+gap)/(minimum+gap))||1));rows.forEach((row,index)=>row.hidden=index>=capacity);list.style.gridTemplateRows="repeat("+capacity+", minmax("+minimum+"px, 1fr))";list.dataset.visibleRows=String(capacity);
+}
 function scheduleWidgetListMotion(node,element) {
   const version=String((Number(node.dataset.motionVersion)||0)+1);node.dataset.motionVersion=version;requestAnimationFrame(()=>{if(node.isConnected&&node.dataset.motionVersion===version)prepareWidgetListMotion(node,element);});
 }
 function prepareWidgetListMotion(node,element) {
-  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,longest=[...node.querySelectorAll(".list-text")].reduce((maximum,target)=>{target.classList.remove("is-overflowing");target.style.removeProperty("--marquee-distance");target.style.removeProperty("--marquee-duration");if(reduced)return maximum;const distance=Math.max(0,target.scrollWidth-target.clientWidth);if(distance<2)return maximum;const duration=window.JUNGLE_CALENDAR.marqueeDuration(distance);target.style.setProperty("--marquee-distance",-distance+"px");target.style.setProperty("--marquee-duration",duration+"ms");void target.offsetWidth;target.classList.add("is-overflowing");return Math.max(maximum,duration);},0),pageCount=Math.max(1,Math.ceil(rotatingItemCount(element)/(element.maxItems||4)));node.dataset.nextListAt=pageCount>1||longest>0?String(Date.now()+longest+3500):"0";
+  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,allowMarquee=element.type!=="codex",longest=[...node.querySelectorAll(".list-text")].reduce((maximum,target)=>{target.classList.remove("is-overflowing");target.style.removeProperty("--marquee-distance");target.style.removeProperty("--marquee-duration");if(reduced||!allowMarquee)return maximum;const distance=Math.max(0,target.scrollWidth-target.clientWidth);if(distance<2)return maximum;const duration=window.JUNGLE_CALENDAR.marqueeDuration(distance);target.style.setProperty("--marquee-distance",-distance+"px");target.style.setProperty("--marquee-duration",duration+"ms");void target.offsetWidth;target.classList.add("is-overflowing");return Math.max(maximum,duration);},0),pageCount=Math.max(1,Math.ceil(rotatingItemCount(element)/(element.maxItems||4)));node.dataset.nextListAt=pageCount>1||longest>0?String(Date.now()+longest+3500):"0";
 }
 function advanceWidgetLists() {
   const now=Date.now();document.querySelectorAll("#layout-canvas .canvas-element.tasks, #layout-canvas .canvas-element.calendar").forEach((node)=>{const due=Number(node.dataset.nextListAt)||0;if(!due||now<due)return;const element=activeDisplay().canvas.elements.find((item)=>item.id===node.dataset.elementId);if(!element)return;const pageCount=Math.max(1,Math.ceil(rotatingItemCount(element)/(element.maxItems||4))),current=(Number(node.dataset.listPage)||0)%pageCount,next=pageCount>1?(current+1)%pageCount:current;node.dataset.listPage=next;styleElement(node,element,true);if(next!==current){node.classList.remove("list-advancing");void node.offsetWidth;node.classList.add("list-advancing");setTimeout(()=>node.classList.remove("list-advancing"),450);}});
@@ -263,7 +305,7 @@ function renderInspector() {
   $("prop-selection-count").textContent = selectedElementIds.size > 1 ? tr("multiSelected",{count:selectedElementIds.size}) : element.id;
   $("prop-opacity-value").textContent = Math.round(element.opacity*100) + "%";$("prop-media-scale-value").textContent=Math.round((element.mediaScale||1)*100)+"%";
 
-  const textTypes = ["text","clock","date","cpu","ram","gpu","uptime","tasks","calendar"];
+  const textTypes = ["text","clock","date","cpu","ram","gpu","uptime","tasks","calendar","codex","claude"];
   const mediaTypes = ["video","youtube","image"];
   $("prop-title-row").hidden = !textTypes.includes(element.type);
   $("prop-hardware-content").hidden = !["cpu","gpu"].includes(element.type);
@@ -334,6 +376,18 @@ function renderSettings() {
   $("launch-at-login").checked=settings.startup.launchAtLogin; $("start-hidden").checked=settings.startup.startHidden; $("start-hidden").disabled=!settings.startup.launchAtLogin; $("auto-connect").checked=settings.startup.autoConnect; $("auto-reconnect").checked=settings.startup.autoReconnect;
   $("reconnect-delay").value=settings.startup.reconnectDelay; $("open-preview").checked=settings.startup.openPreview;
 }
+function providerSummary(provider, quotaText) {
+  if (provider?.connected) return quotaText || "CONNECTED";
+  if (provider?.available) return "AVAILABLE \u00b7 NO LIVE DATA";
+  return "NOT INSTALLED";
+}
+function renderAgentSettings() {
+  const codex=agentSnapshot?.providers?.codex,claude=agentSnapshot?.providers?.claude,codexQuota=codex?.quota?.primary,claudeQuota=claude?.quota;
+  $("codex-agent-status").textContent=providerSummary(codex,codexQuota?.usedPercent!=null?Math.round(codexQuota.usedPercent)+"% \u00b7 "+resetTime(codexQuota.resetsAt):"");
+  const claudeParts=[];if(claudeQuota?.fiveHour?.usedPercent!=null)claudeParts.push("5H "+Math.round(claudeQuota.fiveHour.usedPercent)+"%");if(claudeQuota?.sevenDay?.usedPercent!=null)claudeParts.push("7D "+Math.round(claudeQuota.sevenDay.usedPercent)+"%");
+  $("claude-agent-status").textContent=providerSummary(claude,claudeParts.join(" \u00b7 "));
+  $("agent-task-count").textContent=String(agentSnapshot?.tasks?.length||0);
+}
 function updateDynamic() {
   const now=nowInfo(); $("clock").textContent=new Date().toLocaleTimeString(settings.language==="vi"?"vi-VN":"en-GB");
   const calendarDate=window.JUNGLE_CALENDAR.dateKey(new Date());if(lastCalendarDate&&lastCalendarDate!==calendarDate){renderCanvas();renderCalendar();}lastCalendarDate=calendarDate;
@@ -343,7 +397,7 @@ function updateDynamic() {
   const status=["connecting","streaming","error"].includes(deviceState?.status)?deviceState.status:"disconnected", side=document.querySelector(".sidebar-foot");
   side.className="sidebar-foot "+status;$("sidebar-status").textContent=tr(status)+(deviceState?.portPath?" · "+deviceState.portPath:"");$("stream-stat").textContent=(deviceState?.fps||0)+" FPS";$("frame-detail").textContent=deviceState?.frameBytes?Math.round(deviceState.frameBytes/1000)+" KB/frame":"--";
 }
-function renderAll(){ $("language").value=settings.language;applyLanguage();renderOptions();renderDevices();renderCanvas();renderDisplayForm();renderTasks();renderCalendar();renderSettings();updateDynamic(); }
+function renderAll(){ $("language").value=settings.language;applyLanguage();renderOptions();renderDevices();renderCanvas();renderDisplayForm();renderTasks();renderCalendar();renderSettings();renderAgentSettings();updateDynamic(); }
 async function saveRefresh(message){clearTimeout(saveTimer);const revision=++saveRevision,saved=await window.jungle.saveSettings(structuredClone(settings));if(revision!==saveRevision)return;settings=saved;renderAll();if(message)toast(message);}
 function queueSave(){ $("save-indicator").textContent=tr("saving");clearTimeout(saveTimer);const revision=++saveRevision,snapshot=structuredClone(settings);saveTimer=setTimeout(async()=>{const saved=await window.jungle.saveSettings(snapshot);if(revision!==saveRevision)return;settings=saved;$("save-indicator").textContent=tr("saved");},450); }
 async function scan(){
@@ -358,9 +412,9 @@ async function scan(){
   if(scannedDevices.length)settings=await window.jungle.saveSettings(settings);renderAll();toast(tr("scanned"));
 }
 function newElement(type){
-  const display=activeDisplay(),p=display.profile,large=["video","youtube","image","tasks","calendar"].includes(type),w=Math.min(p.width,large?Math.max(240,Math.round(p.width*.46)):Math.max(150,Math.round(p.width*.23)));
-  const h=Math.min(p.height,["video","youtube","image"].includes(type)?Math.max(140,Math.round(p.height*.42)):["tasks","calendar"].includes(type)?Math.max(160,Math.round(p.height*.55)):Math.max(80,Math.round(p.height*.23)));
-  const labels={cpu:"CPU",ram:"RAM",gpu:"GPU",uptime:"UPTIME",tasks:"TASKS",calendar:"CALENDAR",clock:"TIME",date:"DATE"},fontSize=type==="clock"?52:28,labelScale=["tasks","calendar","uptime"].includes(type)?1.52:.38;
+  const display=activeDisplay(),p=display.profile,large=["video","youtube","image","tasks","calendar","codex","claude"].includes(type),w=Math.min(p.width,large?Math.max(240,Math.round(p.width*.46)):Math.max(150,Math.round(p.width*.23)));
+  const h=Math.min(p.height,["video","youtube","image"].includes(type)?Math.max(140,Math.round(p.height*.42)):["tasks","calendar","codex","claude"].includes(type)?Math.max(160,Math.round(p.height*.55)):Math.max(80,Math.round(p.height*.23)));
+  const labels={cpu:"CPU",ram:"RAM",gpu:"GPU",uptime:"UPTIME",tasks:"TASKS",calendar:"CALENDAR",codex:"CODEX",claude:"CLAUDE CODE",clock:"TIME",date:"DATE"},fontSize=type==="clock"?52:28,labelScale=["tasks","calendar","codex","claude","uptime"].includes(type)?1.52:.38;
   return{id:type+"-"+Date.now().toString(36),type,x:Math.max(0,Math.round((p.width-w)/2)),y:Math.max(0,Math.round((p.height-h)/2)),width:w,height:h,color:"#effaf5",background:type==="shape"?"#62edab":"#102832",fontSize,textStrokeColor:"#000000",textStrokeWidth:0,labelColor:"#effaf5",labelFontSize:Math.round(fontSize*labelScale*10)/10,labelStrokeColor:"#000000",labelStrokeWidth:0,opacity:1,radius:12,fit:"cover",mediaScale:1,z:Math.max(0,...display.canvas.elements.map((item)=>item.z))+1,title:labels[type]||"",text:type==="text"?"Your text":"",source:"",maxItems:4,showUsage:true,showTemperature:true};
 }
 function arrangeSelection(mode){
@@ -392,7 +446,7 @@ function inspectorChange(event){
   const oldWidth=e.width,oldHeight=e.height,oldFont=e.fontSize,oldRadius=e.radius,oldStroke=e.textStrokeWidth||0,oldLabelFont=resolvedLabelStyle(e).fontSize,oldLabelStroke=resolvedLabelStyle(e).strokeWidth;
   e.title=$("prop-title").value;e.text=$("prop-text").value;e.source=$("prop-source").value;
   e.width=Math.round(clamp($("prop-width").value,40,p.width,e.width));e.height=Math.round(clamp($("prop-height").value,32,p.height,e.height));
-  if(event && ["prop-width","prop-height"].includes(event.target.id)){
+  if(event && ["prop-width","prop-height"].includes(event.target.id) && !["codex","claude"].includes(e.type)){
     const ratio=Math.sqrt((e.width*e.height)/(oldWidth*oldHeight));
     $("prop-font-size").value=Math.round(clamp(oldFont*ratio,6,300,oldFont));
     $("prop-radius").value=Math.round(clamp(oldRadius*ratio,0,200,oldRadius));$("prop-stroke-width").value=Math.round(clamp(oldStroke*ratio,0,30,oldStroke)*10)/10;$("prop-label-font-size").value=Math.round(clamp(oldLabelFont*ratio,4,400,oldLabelFont)*10)/10;$("prop-label-stroke-width").value=Math.round(clamp(oldLabelStroke*ratio,0,30,oldLabelStroke)*10)/10;
@@ -437,7 +491,11 @@ function bind(){
       const dx=Math.round(clamp(rawDx,-dragState.bounds.left,p.width-dragState.bounds.right,0)),dy=Math.round(clamp(rawDy,-dragState.bounds.top,p.height-dragState.bounds.bottom,0));
       dragState.items.forEach((original)=>{const item=activeDisplay().canvas.elements.find((candidate)=>candidate.id===original.id);if(item){item.x=original.x+dx;item.y=original.y+dy;const node=$("layout-canvas").querySelector('[data-element-id="'+CSS.escape(item.id)+'"]');if(node)styleElement(node,item,false);}});
     }else{
-      e.width=Math.round(clamp(dragState.original.width+rawDx,40,p.width-e.x,40));e.height=Math.round(clamp(dragState.original.height+rawDy,32,p.height-e.y,32));const ratio=Math.sqrt((e.width*e.height)/(dragState.original.width*dragState.original.height));e.fontSize=Math.round(clamp(dragState.original.fontSize*ratio,6,300,dragState.original.fontSize));e.labelFontSize=Math.round(clamp(dragState.original.labelFontSize*ratio,4,400,dragState.original.labelFontSize)*10)/10;e.radius=Math.round(clamp(dragState.original.radius*ratio,0,200,dragState.original.radius));e.textStrokeWidth=Math.round(clamp(dragState.original.textStrokeWidth*ratio,0,30,dragState.original.textStrokeWidth)*10)/10;e.labelStrokeWidth=Math.round(clamp(dragState.original.labelStrokeWidth*ratio,0,30,dragState.original.labelStrokeWidth)*10)/10;$("prop-font-size").value=e.fontSize;$("prop-label-font-size").value=e.labelFontSize;$("prop-radius").value=e.radius;$("prop-stroke-width").value=e.textStrokeWidth;$("prop-label-stroke-width").value=e.labelStrokeWidth;const node=$("layout-canvas").querySelector('[data-element-id="'+CSS.escape(e.id)+'"]');if(node)styleElement(node,e,false);
+      e.width=Math.round(clamp(dragState.original.width+rawDx,40,p.width-e.x,40));e.height=Math.round(clamp(dragState.original.height+rawDy,32,p.height-e.y,32));
+      if(!["codex","claude"].includes(e.type)){
+        const ratio=Math.sqrt((e.width*e.height)/(dragState.original.width*dragState.original.height));e.fontSize=Math.round(clamp(dragState.original.fontSize*ratio,6,300,dragState.original.fontSize));e.labelFontSize=Math.round(clamp(dragState.original.labelFontSize*ratio,4,400,dragState.original.labelFontSize)*10)/10;e.radius=Math.round(clamp(dragState.original.radius*ratio,0,200,dragState.original.radius));e.textStrokeWidth=Math.round(clamp(dragState.original.textStrokeWidth*ratio,0,30,dragState.original.textStrokeWidth)*10)/10;e.labelStrokeWidth=Math.round(clamp(dragState.original.labelStrokeWidth*ratio,0,30,dragState.original.labelStrokeWidth)*10)/10;$("prop-font-size").value=e.fontSize;$("prop-label-font-size").value=e.labelFontSize;$("prop-radius").value=e.radius;$("prop-stroke-width").value=e.textStrokeWidth;$("prop-label-stroke-width").value=e.labelStrokeWidth;
+      }
+      const node=$("layout-canvas").querySelector('[data-element-id="'+CSS.escape(e.id)+'"]');if(node)styleElement(node,e,false);
     }
     ["x","y","width","height"].forEach((key)=>$("prop-"+key).value=e[key]);
   });
@@ -472,14 +530,17 @@ function bind(){
   const calendarListClick=async(e)=>{const editId=e.target.dataset.eventEdit,deleteId=e.target.dataset.eventDelete;if(editId)return startEventEdit(editId);if(!deleteId)return;settings.events=settings.events.filter((event)=>event.id!==deleteId);if(editingEventId===deleteId)resetEventForm();await saveRefresh(tr("saved"));};
   ["calendar-today-list","calendar-upcoming-list","calendar-all-list"].forEach((id)=>$(id).onclick=calendarListClick);
   $("launch-at-login").onchange=()=>{$("start-hidden").disabled=!$("launch-at-login").checked;};
+  $("refresh-agents").onclick=async()=>{try{agentSnapshot=await window.jungle.refreshAgents();renderCanvas();renderAgentSettings();}catch{toast(tr("agentRefreshFailed"));}};
+  $("configure-claude").onclick=async()=>{const result=await window.jungle.configureClaudeBridge();if(result?.ok)toast(tr("claudeBridgeEnabled"));else if(result?.reason==="existing-status-line")toast(tr("existingStatusLine"));else toast(tr("agentRefreshFailed"));};
   $("save-settings").onclick=async()=>{settings.startup={launchAtLogin:$("launch-at-login").checked,startHidden:$("start-hidden").checked,autoConnect:$("auto-connect").checked,autoReconnect:$("auto-reconnect").checked,reconnectDelay:Number($("reconnect-delay").value),openPreview:$("open-preview").checked};await saveRefresh(tr("saved"));};
   resetEventForm();
 }
 async function start(){
-  [settings,stats,deviceState]=await Promise.all([window.jungle.getSettings(),window.jungle.getSystem(),window.jungle.getDeviceState()]);bind();renderAll();await scan().catch(()=>renderAll());
+  [settings,stats,deviceState,agentSnapshot]=await Promise.all([window.jungle.getSettings(),window.jungle.getSystem(),window.jungle.getDeviceState(),window.jungle.getAgents()]);bind();renderAll();await scan().catch(()=>renderAll());
   setInterval(async()=>{stats=await window.jungle.getSystem();updateDynamic();},1000);
   setInterval(advanceWidgetLists,200);
   window.jungle.onDevice((next)=>{deviceState=next;renderDevices();updateDynamic();});
   window.jungle.onSettings((next)=>{settings=next;if(!dragState)renderAll();});
+  window.jungle.onAgents((next)=>{agentSnapshot=next;renderCanvas();renderAgentSettings();});
 }
 start();

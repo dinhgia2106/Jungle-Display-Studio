@@ -2,7 +2,7 @@ const { DEFAULT_PROFILE, clamp, sanitizeProfile } = require('./display-profile')
 
 const ELEMENT_TYPES = new Set([
   'text', 'clock', 'date', 'cpu', 'ram', 'gpu', 'uptime',
-  'tasks', 'calendar', 'video', 'youtube', 'image', 'shape'
+  'tasks', 'calendar', 'codex', 'claude', 'video', 'youtube', 'image', 'shape'
 ]);
 
 function color(value, fallback) {
@@ -91,14 +91,14 @@ function defaultCanvas(profile = DEFAULT_PROFILE) {
 }
 
 function elementDefaults(type, index) {
-  const labels = { cpu: 'CPU', ram: 'RAM', gpu: 'GPU', uptime: 'UPTIME', tasks: 'TASKS', calendar: 'CALENDAR', clock: 'TIME', date: 'DATE' };
+  const labels = { cpu: 'CPU', ram: 'RAM', gpu: 'GPU', uptime: 'UPTIME', tasks: 'TASKS', calendar: 'CALENDAR', codex: 'CODEX', claude: 'CLAUDE CODE', clock: 'TIME', date: 'DATE' };
   return {
     id: 'element-' + index,
     type,
     x: 20,
     y: 20,
-    width: ['video', 'youtube', 'image', 'tasks', 'calendar'].includes(type) ? 360 : 220,
-    height: ['video', 'youtube', 'image'].includes(type) ? 200 : ['tasks', 'calendar'].includes(type) ? 220 : 110,
+    width: ['video', 'youtube', 'image', 'tasks', 'calendar', 'codex', 'claude'].includes(type) ? 360 : 220,
+    height: ['video', 'youtube', 'image'].includes(type) ? 200 : ['tasks', 'calendar', 'codex', 'claude'].includes(type) ? 220 : 110,
     color: '#effaf5',
     background: type === 'shape' ? '#62edab' : '#102832',
     fontSize: type === 'clock' ? 52 : 28,
@@ -120,15 +120,17 @@ function elementDefaults(type, index) {
 
 function sanitizeElement(value, profile, index) {
   const safeProfile = sanitizeProfile(profile);
-  const type = ELEMENT_TYPES.has(value?.type) ? value.type : 'text';
-  const base = { ...elementDefaults(type, index), ...(value || {}), type };
+  const requestedType = value?.type === 'agents' ? 'codex' : value?.type;
+  const type = ELEMENT_TYPES.has(requestedType) ? requestedType : 'text';
+  const migrated = value?.type === 'agents' && value?.title === 'AI AGENTS' ? { ...value, title: 'CODEX' } : value;
+  const base = { ...elementDefaults(type, index), ...(migrated || {}), type };
   const width = clamp(base.width, 40, safeProfile.width, Math.min(220, safeProfile.width));
   const height = clamp(base.height, 32, safeProfile.height, Math.min(110, safeProfile.height));
   const fontSize = clamp(base.fontSize, 6, 300, 28);
   const textColor = color(base.color, '#effaf5');
   const textStrokeColor = color(base.textStrokeColor, '#000000');
   const textStrokeWidth = Math.round(number(base.textStrokeWidth, 0, 30, 0) * 10) / 10;
-  const legacyLabelScale = ['tasks', 'calendar', 'uptime'].includes(type) ? 1.52 : 0.38;
+  const legacyLabelScale = ['tasks', 'calendar', 'codex', 'claude', 'uptime'].includes(type) ? 1.52 : 0.38;
   return {
     id: safeId(base.id, 'element-' + index),
     type,
