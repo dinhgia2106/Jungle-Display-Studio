@@ -21,7 +21,7 @@ Each discovered display keeps its own USB port, resolution, brightness, rotation
 - English by default, with a Vietnamese interface.
 - Windows login launch with an optional hidden start, auto-connect, reconnect delay and preview-on-launch.
 - Closing the control window keeps streaming in the system tray; the tray menu can reopen Preview or quit fully.
-- YouTube embeds retry when the player frame fails to load or reports an error, without periodically restarting a loaded video.
+- YouTube embeds automatically reset when the player frame fails, shows a non-player page such as the transient anti-bot prompt, or reports an error. Retries back off while the problem persists and stop as soon as the Player API is ready, so a working video is not periodically restarted.
 - Local settings only; no telemetry or cloud account.
 
 The USB driver streams to one selected Jungle display at a time. Switching the active display disconnects the previous stream so frames cannot be sent to the wrong device.

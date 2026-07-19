@@ -1,5 +1,6 @@
 (() => {
-  const MAX_RETRIES = 5;
+  const INITIAL_RETRY_DELAY = 12000;
+  const MAX_RETRY_DELAY = 300000;
 
   function embedUrl(id, retryToken = '') {
     const params = new URLSearchParams({
@@ -31,7 +32,12 @@
     frame.__jungleRetryTimer = null;
   }
 
-  function scheduleRetry(frame, delay = 12000) {
+  function retryDelay(attempt) {
+    if (attempt <= 5) return 10000 + attempt * 4000;
+    return Math.min(MAX_RETRY_DELAY, 60000 * (2 ** Math.min(3, attempt - 6)));
+  }
+
+  function scheduleRetry(frame, delay = INITIAL_RETRY_DELAY) {
     clearRetry(frame);
     frame.__jungleRetryTimer = setTimeout(() => {
       frame.__jungleRetryTimer = null;
@@ -40,11 +46,11 @@
       }
       const attempt = Number(frame.dataset.youtubeAttempt || 0) + 1;
       frame.dataset.youtubeAttempt = String(attempt);
-      if (attempt > MAX_RETRIES) return;
       const id = frame.dataset.youtubeId;
       frame.dataset.youtubeLoaded = '0';
+      frame.dataset.youtubeReady = '0';
       frame.src = embedUrl(id, Date.now() + '-' + attempt);
-      scheduleRetry(frame, Math.min(30000, 10000 + attempt * 4000));
+      scheduleRetry(frame, retryDelay(attempt));
     }, delay);
   }
 
@@ -60,8 +66,12 @@
     frame.__jungleWatched = true;
     frame.id ||= 'jungle-youtube-' + Math.random().toString(36).slice(2);
     frame.addEventListener('load', () => {
-      frame.dataset.youtubeLoaded = '1';
-      clearRetry(frame);
+      // A YouTube anti-bot/error page also fires `load`. Keep the watchdog
+      // armed until the Player API proves that the actual player is ready.
+      frame.dataset.youtubeLoaded = '0';
+      frame.dataset.youtubeReady = '0';
+      const attempt = Number(frame.dataset.youtubeAttempt || 0);
+      scheduleRetry(frame, attempt ? retryDelay(attempt) : INITIAL_RETRY_DELAY);
       setTimeout(() => frame.isConnected && requestPlayerEvents(frame), 250);
     });
     scheduleRetry(frame);
@@ -93,6 +103,8 @@
     }
     if (['onReady', 'infoDelivery', 'initialDelivery'].includes(data?.event)) {
       frame.dataset.youtubeReady = '1';
+      frame.dataset.youtubeLoaded = '1';
+      frame.dataset.youtubeAttempt = '0';
       clearRetry(frame);
       post(frame, { event: 'command', func: 'playVideo', args: [] });
     }

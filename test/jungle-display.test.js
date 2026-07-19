@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const { BAUD_RATE, TARGET_FRAME_INTERVAL_MS, remainingFrameDelay, buildCommand, isJungleDisplayPort } = require('../src/jungle-display');
 const { sanitizeProfile, fitPreview } = require('../src/display-profile');
 const { defaultCanvas, normalizeWorkspace, activeDisplay, sanitizeCanvas } = require('../src/workspace');
@@ -24,6 +26,81 @@ assert.equal(parseTemperatureOutput('\r\nnot-a-sensor\r\n72.25\r\n'), 72.3);
 assert.match(windowsSensorScript('cpu'), /MSAcpi_ThermalZoneTemperature/);
 assert.match(windowsSensorScript('cpu'), /High Precision Temperature/);
 assert.doesNotMatch(windowsSensorScript('gpu'), /MSAcpi_ThermalZoneTemperature/);
+
+function createYoutubeWatchdogFixture() {
+  let nextTimerId = 1;
+  const timers = new Map();
+  const frameListeners = {};
+  const windowListeners = {};
+  const frame = {
+    dataset: { youtubeId: 'video-id' },
+    isConnected: true,
+    src: '',
+    contentWindow: { postMessage() {} },
+    addEventListener(type, listener) { frameListeners[type] = listener; },
+    matches(selector) { return selector === 'iframe[data-youtube-id]'; },
+    querySelectorAll() { return []; }
+  };
+  const window = {
+    addEventListener(type, listener) { windowListeners[type] = listener; }
+  };
+  const document = {
+    querySelectorAll() { return [frame]; }
+  };
+  const setTimeout = (callback, delay) => {
+    const id = nextTimerId++;
+    timers.set(id, { callback, delay });
+    return id;
+  };
+  const clearTimeout = (id) => timers.delete(id);
+  vm.runInNewContext(
+    fs.readFileSync(require.resolve('../src/renderer/youtube.js'), 'utf8'),
+    { window, document, URL, URLSearchParams, setTimeout, clearTimeout }
+  );
+  return {
+    youtube: window.JUNGLE_YOUTUBE,
+    frame,
+    frameListeners,
+    timers,
+    sendPlayerEvent(event) {
+      windowListeners.message({
+        origin: 'https://www.youtube-nocookie.com',
+        source: frame.contentWindow,
+        data: JSON.stringify({ event })
+      });
+    }
+  };
+}
+
+const youtubeFixture = createYoutubeWatchdogFixture();
+youtubeFixture.youtube.watch({ querySelector: () => youtubeFixture.frame });
+assert.equal(youtubeFixture.frame.__jungleWatched, true);
+assert.equal(youtubeFixture.timers.has(youtubeFixture.frame.__jungleRetryTimer), true);
+
+youtubeFixture.frameListeners.load();
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '0');
+assert.equal(youtubeFixture.timers.has(youtubeFixture.frame.__jungleRetryTimer), true);
+
+youtubeFixture.sendPlayerEvent('onReady');
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '1');
+assert.equal(youtubeFixture.frame.dataset.youtubeReady, '1');
+assert.equal(youtubeFixture.frame.__jungleRetryTimer, null);
+
+youtubeFixture.sendPlayerEvent('onError');
+const errorRetryTimer = youtubeFixture.frame.__jungleRetryTimer;
+assert.equal(youtubeFixture.frame.dataset.youtubeLoaded, '0');
+assert.equal(youtubeFixture.timers.get(errorRetryTimer).delay, 1500);
+youtubeFixture.frame.dataset.youtubeAttempt = '5';
+youtubeFixture.timers.get(errorRetryTimer).callback();
+assert.equal(youtubeFixture.frame.dataset.youtubeAttempt, '6');
+assert.equal(youtubeFixture.timers.get(youtubeFixture.frame.__jungleRetryTimer).delay, 60000);
+assert.match(youtubeFixture.frame.src, /jungle_retry=/);
+youtubeFixture.frameListeners.load();
+assert.equal(youtubeFixture.timers.get(youtubeFixture.frame.__jungleRetryTimer).delay, 60000);
+
+youtubeFixture.youtube.unwatch(youtubeFixture.frame);
+assert.equal(youtubeFixture.frame.__jungleWatched, false);
+assert.equal(youtubeFixture.frame.__jungleRetryTimer, null);
 
 assert.deepEqual(sanitizeProfile({ preset: 'custom', name: 'Portrait', width: 480, height: 800, rotation: 0 }), {
   preset: 'custom', name: 'Portrait', width: 480, height: 800, rotation: 0
